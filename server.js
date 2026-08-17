@@ -4,7 +4,7 @@ const path = require('node:path');
 const url = require('node:url');
 
 const { sendJson, parseBody, parseCookies, ApiError, MSG } = require('./utils');
-const { getSessionUser } = require('./auth');
+const { getSessionUser } = require('./routes/auth');
 const authRoutes = require('./routes/auth');
 const products = require('./routes/products');
 const sales = require('./routes/sales');
