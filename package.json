@@ -1,0 +1,15 @@
+{
+  "name": "stockuniform-ai",
+  "version": "1.0.0",
+  "description": "ระบบจัดการสต็อกอัจฉริยะสำหรับร้านขายชุดนักศึกษา",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed:demo": "node seed_demo.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}
