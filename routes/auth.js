@@ -42,23 +42,7 @@ function destroySession(token) {
 
 module.exports = { hashPassword, verifyUser, createSession, getSessionUser, destroySession };
 
-const { DatabaseSync } = require('node:sqlite');
-const path = require('node:path');
 
-
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'stockuniform.db');
-const db = new DatabaseSync(DB_PATH);
-db.exec('PRAGMA foreign_keys = ON');
-
-db.exec(`
-CREATE TABLE IF NOT EXISTS users (
-  user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  salt TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'staff', -- admin | staff
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
 
 CREATE TABLE IF NOT EXISTS sessions (
   token TEXT PRIMARY KEY,
