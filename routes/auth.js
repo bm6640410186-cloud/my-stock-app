@@ -44,7 +44,7 @@ module.exports = { hashPassword, verifyUser, createSession, getSessionUser, dest
 
 const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path');
-const crypto = require('node:crypto');
+
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'stockuniform.db');
 const db = new DatabaseSync(DB_PATH);
