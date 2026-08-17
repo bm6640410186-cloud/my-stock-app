@@ -44,4 +44,4 @@ function listSales(query) {
 module.exports = { createSale, listSales };
 
 
-module.exports = { listPurchaseOrders, createPurchaseOrder, getPurchaseOrder, updateStatus };
+
