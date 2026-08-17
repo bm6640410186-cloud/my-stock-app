@@ -1,8 +1,12 @@
 const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path');
 const crypto = require('node:crypto');
-
+const fs = require('node:fs');
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'data', 'stockuniform.db');
+const dbDir = path.dirname(DB_PATH);
+if (!fs.existsSync(dbDir)) {
+fs.mkdirSync(dbDir, { recursive: true });
+}
 const db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA foreign_keys = ON');
 
