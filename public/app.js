@@ -1,190 +1,89 @@
-/* ============ CORE: API CLIENT / TOAST / MODAL ============ */
-async function api(path, opts = {}) {
-  const res = await fetch('/api' + path, {
-    method: opts.method || 'GET',
-    headers: opts.body ? { 'Content-Type': 'application/json' } : undefined,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
-  if (res.status === 401) { window.location.href = '/login.html'; throw new Error('unauthorized'); }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'เกิดข้อผิดพลาด');
-  return data;
+// ฟังก์ชันช่วยส่ง Request พร้อมแนบ Token
+async function fetchApi(url, options = {}) {
+  const token = localStorage.getItem('token');
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    ...options.headers
+  };
+  
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401 && !url.includes('/api/auth/login')) {
+    localStorage.removeItem('token');
+    showLoginPage();
+  }
+  return res;
 }
 
-function toast(message, type = '') {
-  const host = document.getElementById('toastHost');
-  const el = document.createElement('div');
-  el.className = 'toast' + (type ? ' ' + type : '');
-  el.textContent = message;
-  host.appendChild(el);
-  setTimeout(() => el.remove(), 3200);
-}
-
-const modalOverlay = document.getElementById('modalOverlay');
-const modalBody = document.getElementById('modalBody');
-function openModal(html) { modalBody.innerHTML = html; modalOverlay.classList.add('active'); }
-function closeModal() { modalOverlay.classList.remove('active'); modalBody.innerHTML = ''; }
-modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
-
-const fmt = (n) => Number(n || 0).toLocaleString('th-TH');
-const fmtBaht = (n) => '฿' + Number(n || 0).toLocaleString('th-TH');
-
-/* ============ VIEW SWITCHING ============ */
-const viewLoaders = {
-  dashboard: loadDashboard, products: loadProducts, receiving: loadReceivingForm,
-  sales: loadSalesView, purchase: loadPurchaseView, purchaseorders: loadPurchaseOrders,
-  suppliers: loadSuppliers, deadstock: loadDeadStock,
-};
-function showView(name) {
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById('view-' + name).classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.view === name));
-  if (viewLoaders[name]) viewLoaders[name]();
-}
-document.querySelectorAll('.nav-item').forEach(btn => btn.addEventListener('click', () => showView(btn.dataset.view)));
-document.addEventListener('click', (e) => {
-  const g = e.target.closest('[data-goto]');
-  if (g) showView(g.dataset.goto);
-});
-
-/* ============ DASHBOARD ============ */
-function recCardHTML(r) {
-  return `
-  <div class="rec-card ${r.urgency}">
-    <div class="rec-icon">${r.product_name.slice(0, 2)}</div>
-    <div class="rec-body">
-      <div class="rec-title">${r.product_name} • ไซซ์ ${r.size} <span class="mono">(${r.sku})</span></div>
-      <div class="rec-reason">คงเหลือ ${fmt(r.current_stock)} ชิ้น • ขายเฉลี่ย ${r.avg_daily_sales} ชิ้น/วัน • รอสินค้าจาก ${r.supplier_name} ${r.lead_time} วัน</div>
-      <div class="rec-formula">
-        <span class="chip">ขายเฉลี่ย ${r.avg_daily_sales}×${r.lead_time}วัน</span><span class="op">+</span>
-        <span class="chip">Safety ${r.safety_stock}</span><span class="op">−</span>
-        <span class="chip">คงเหลือ ${r.current_stock}</span><span class="op">=</span>
-        <span class="chip result">แนะนำสั่ง ${r.recommended_qty}</span>
-      </div>
-    </div>
-    <div class="rec-action">
-      <div class="qty-pill">${r.recommended_qty}<span class="u">ชิ้น</span></div>
-      <button class="btn small block" onclick="quickCreatePO(${r.product_id}, ${r.recommended_qty}, ${r.supplier_id || 'null'})">สร้างใบสั่งซื้อ</button>
-    </div>
-  </div>`;
-}
-function deadCardHTML(d) {
-  return `
-  <div class="rec-card">
-    <div class="rec-icon">${d.product_name.slice(0, 2)}</div>
-    <div class="rec-body">
-      <div class="rec-title">${d.product_name} • ไซซ์ ${d.size}</div>
-      <div class="rec-reason">ไม่มีการขายมาแล้ว ${d.days_since_last_sale} วัน • คงเหลือ ${fmt(d.current_stock)} ชิ้น • มูลค่าจม ${fmtBaht(d.value_at_risk)}</div>
-    </div>
-    <div class="rec-action"><span class="tag ${d.cls}">${d.level}</span></div>
-  </div>`;
-}
-async function loadDashboard() {
+// ตรวจสอบการเข้าสู่ระบบเมื่อเปิดหน้าเว็บ
+async function checkAuth() {
   try {
-    const d = await api('/dashboard');
-    document.getElementById('kpiRow').innerHTML = `
-      <div class="kpi"><div class="kpi-label">สินค้าทั้งหมด</div><div class="kpi-value">${fmt(d.total_products)}</div></div>
-      <div class="kpi danger"><div class="kpi-label">สินค้าหมด</div><div class="kpi-value">${fmt(d.out_of_stock)}</div></div>
-      <div class="kpi warn"><div class="kpi-label">ต้องสั่งด่วน</div><div class="kpi-value">${fmt(d.urgent_reorder)}</div></div>
-      <div class="kpi"><div class="kpi-label">มูลค่าสต็อกรวม</div><div class="kpi-value">${fmtBaht(d.stock_value)}</div></div>
-      <div class="kpi"><div class="kpi-label">ยอดขาย 30 วัน</div><div class="kpi-value">${fmtBaht(d.sales_last_30_days)}</div></div>
-      <div class="kpi warn"><div class="kpi-label">มูลค่าสต็อกค้าง</div><div class="kpi-value">${fmtBaht(d.dead_stock_value)}</div></div>`;
-    document.getElementById('dashRecs').innerHTML = d.top_recommendations.length
-      ? d.top_recommendations.map(recCardHTML).join('') : `<div class="empty">ไม่มีคำแนะนำสั่งซื้อในขณะนี้</div>`;
-    document.getElementById('dashDead').innerHTML = d.critical_dead_stock.length
-      ? d.critical_dead_stock.map(deadCardHTML).join('') : `<div class="empty">ไม่มีสินค้าค้างสต็อกระดับวิกฤต</div>`;
-  } catch (e) { toast(e.message, 'error'); }
-}
-
-/* ============ PRODUCTS ============ */
-let productsCache = [];
-let suppliersCache = [];
-async function ensureSuppliersLoaded() {
-  if (!suppliersCache.length) suppliersCache = await api('/suppliers');
-  return suppliersCache;
-}
-function statusTag(p) {
-  if (p.current_stock === 0) return `<span class="tag crit">หมด</span>`;
-  if (p.current_stock <= p.reorder_point) return `<span class="tag warn">ใกล้หมด</span>`;
-  return `<span class="tag ok">ปกติ</span>`;
-}
-async function loadProducts() {
-  try {
-    const q = document.getElementById('searchInput').value.trim();
-    const category = document.getElementById('categoryFilter').value;
-    const status = document.getElementById('statusFilter').value;
-    const params = new URLSearchParams();
-    if (q) params.set('q', q); if (category) params.set('category', category); if (status) params.set('status', status);
-    productsCache = await api('/products?' + params.toString());
-
-    const catSel = document.getElementById('categoryFilter');
-    if (!catSel.dataset.filled) {
-      const cats = [...new Set(productsCache.map(p => p.category))];
-      catSel.innerHTML = `<option value="">ทุกหมวดหมู่</option>` + cats.map(c => `<option value="${c}">${c}</option>`).join('');
-      catSel.dataset.filled = '1';
+    const res = await fetchApi('/api/auth/me');
+    const data = await res.json();
+    if (data && data.user) {
+      showDashboard(data.user);
+    } else {
+      showLoginPage();
     }
-    document.getElementById('productsCount').textContent = `${productsCache.length} รายการ`;
-    document.getElementById('productsTableWrap').innerHTML = productsCache.length ? `
-      <table><thead><tr><th>SKU</th><th>สินค้า</th><th>ไซซ์</th><th>คงเหลือ</th><th>ROP</th><th>สถานะ</th><th></th></tr></thead>
-      <tbody>${productsCache.map(p => `
-        <tr>
-          <td class="mono">${p.sku}</td>
-          <td style="text-align:right;cursor:pointer;color:var(--navy);font-weight:500" onclick="openProductDetail(${p.product_id})">${p.product_name}</td>
-          <td>${p.size}</td><td>${fmt(p.current_stock)}</td><td>${fmt(p.reorder_point)}</td><td>${statusTag(p)}</td>
-          <td><div class="actions-cell">
-            <button class="icon-btn" onclick="openProductForm(${p.product_id})">แก้ไข</button>
-            <button class="icon-btn danger" onclick="deleteProduct(${p.product_id})">ลบ</button>
-          </div></td>
-        </tr>`).join('')}</tbody></table>`
-      : `<div class="empty">ไม่พบสินค้าที่ค้นหา</div>`;
-  } catch (e) { toast(e.message, 'error'); }
+  } catch (err) {
+    showLoginPage();
+  }
 }
-document.getElementById('searchInput').addEventListener('input', debounce(loadProducts, 300));
-document.getElementById('categoryFilter').addEventListener('change', loadProducts);
-document.getElementById('statusFilter').addEventListener('change', loadProducts);
-function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
-async function openProductDetail(id) {
-  showView('productdetail');
-  document.getElementById('productDetailBody').innerHTML = `<div class="skeleton" style="height:200px"></div>`;
+// ฟังก์ชันจัดการตอนกดปุ่ม Login
+async function handleLogin(username, password) {
   try {
-    const p = await api('/products/' + id);
-    document.getElementById('productDetailBody').innerHTML = `
-      <div class="topbar"><div><h1>${p.product_name}</h1><div class="sub mono">${p.sku} • ไซซ์ ${p.size}</div></div></div>
-      <div class="kpi-row">
-        <div class="kpi"><div class="kpi-label">คงเหลือ</div><div class="kpi-value">${fmt(p.current_stock)}</div></div>
-        <div class="kpi"><div class="kpi-label">ราคาทุน</div><div class="kpi-value">${fmtBaht(p.cost_price)}</div></div>
-        <div class="kpi"><div class="kpi-label">ราคาขาย</div><div class="kpi-value">${fmtBaht(p.selling_price)}</div></div>
-        <div class="kpi"><div class="kpi-label">Reorder Point</div><div class="kpi-value">${fmt(p.reorder_point)}</div></div>
-      </div>
-      <div class="note">Supplier: ${p.supplier_name || 'ยังไม่ระบุ'}</div>
-      <h2 style="font-size:14px;margin:20px 0 10px;color:var(--navy);">ประวัติการเคลื่อนไหวสต็อก</h2>
-      ${p.history.length ? `<table><thead><tr><th>วันที่</th><th>ประเภท</th><th>จำนวน</th><th>อ้างอิง</th><th>หมายเหตุ</th></tr></thead>
-        <tbody>${p.history.map(h => `<tr><td>${h.created_at}</td><td>${txnLabel(h.transaction_type)}</td>
-          <td style="color:${h.quantity < 0 ? 'var(--red)' : 'var(--green)'}">${h.quantity > 0 ? '+' : ''}${h.quantity}</td>
-          <td class="mono">${h.reference || '-'}</td><td>${h.note || '-'}</td></tr>`).join('')}</tbody></table>`
-        : `<div class="empty">ยังไม่มีประวัติการเคลื่อนไหว</div>`}`;
-  } catch (e) { toast(e.message, 'error'); }
-}
-function txnLabel(t) {
-  return { receive: 'รับเข้า', sale: 'ขายออก', adjust: 'ปรับยอด', po_receive: 'รับตาม PO' }[t] || t;
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    
+    const data = await res.json();
+    if (res.ok && data.user) {
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+      }
+      // ล็อกอินสำเร็จ สลับไปหน้า Dashboard ทันที
+      showDashboard(data.user);
+    } else {
+      alert(data.error || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+    }
+  } catch (err) {
+    alert('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+  }
 }
 
-async function openProductForm(id) {
-  await ensureSuppliersLoaded();
-  const p = id ? productsCache.find(x => x.product_id === id) || await api('/products/' + id) : null;
-  const supOptions = suppliersCache.map(s => `<option value="${s.supplier_id}" ${p && p.supplier_id === s.supplier_id ? 'selected' : ''}>${s.supplier_name}</option>`).join('');
-  openModal(`
-    <h3>${id ? 'แก้ไขสินค้า' : 'เพิ่มสินค้าใหม่'}</h3>
-    <form id="productForm">
-      <div class="field-row">
-        <div class="field"><label>รหัส SKU *</label><input id="f_sku" value="${p ? p.sku : ''}" required></div>
-        <div class="field"><label>หมวดหมู่ *</label><input id="f_category" value="${p ? p.category : ''}" required></div>
-      </div>
-      <div class="field"><label>ชื่อสินค้า *</label><input id="f_name" value="${p ? p.product_name : ''}" required></div>
-      <div class="field-row">
-        <div class="field"><label>ไซซ์ *</label><input id="f_size" value="${p ? p.size : ''}" required></div>
-        <div class="field"><label>สี</label><input id="f_color" value="${p ? p.color : ''}"></div>
+function showLoginPage() {
+  const loginSection = document.getElementById('login-section') || document.querySelector('.login-container');
+  const appSection = document.getElementById('app-section') || document.getElementById('main-content');
+  if (loginSection) loginSection.style.display = 'block';
+  if (appSection) appSection.style.display = 'none';
+}
+
+function showDashboard(user) {
+  const loginSection = document.getElementById('login-section') || document.querySelector('.login-container');
+  const appSection = document.getElementById('app-section') || document.getElementById('main-content');
+  if (loginSection) loginSection.style.display = 'none';
+  if (appSection) appSection.style.display = 'block';
+}
+
+// เรียกตรวจสถานะเมื่อโหลดหน้าเว็บ
+document.addEventListener('DOMContentLoaded', () => {
+  checkAuth();
+  
+  const loginForm = document.getElementById('login-form') || document.querySelector('form');
+  if (loginForm) {
+    loginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const usernameInput = document.getElementById('username') || document.querySelector('input[type="text"]');
+      const passwordInput = document.getElementById('password') || document.querySelector('input[type="password"]');
+      if (usernameInput && passwordInput) {
+        handleLogin(usernameInput.value, passwordInput.value);
+      }
+    });
+  }
+});
       </div>
       <div class="field-row">
         <div class="field"><label>ราคาทุน</label><input type="number" step="0.01" id="f_cost" value="${p ? p.cost_price : 0}"></div>
