@@ -14,7 +14,7 @@ function verifyUser(username, password) {
   try {
     const safeUsername = String(username || '');
     if (!safeUsername) return null;
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(safeUsername);
+    const user = db.prepare('SELECT rowid as row_id, * FROM users WHERE username = ?').get(safeUsername);
     if (!user) return null;
     const hash = hashPassword(String(password || ''), user.salt);
     if (!hash || !user.password_hash) return null;
@@ -43,10 +43,9 @@ function getSessionUser(token) {
   try {
     if (!token) return null;
     const safeToken = String(token || '');
-    // แก้ไขคำสั่ง SQL ไม่ให้เรียก u.id ที่ไม่มีอยู่
     const row = db.prepare(`
-      SELECT s.*, u.username, u.role, s.user_id FROM sessions s
-      JOIN users u ON u.rowid = s.user_id OR u.username = u.username
+      SELECT s.*, u.username, u.role FROM sessions s
+      JOIN users u ON u.rowid = s.user_id
       WHERE s.token = ?
     `).get(safeToken);
     if (!row) return null;
@@ -74,7 +73,7 @@ function login(username, password) {
   try {
     const user = verifyUser(username, password);
     if (!user) return null;
-    const userId = user.user_id || user.id || 1;
+    const userId = user.id || user.user_id || user.row_id || 1;
     const session = createSession(userId);
     if (!session) return null;
     return { token: session.token, user: { id: userId, username: user.username, role: user.role } };
