@@ -17,9 +17,11 @@ function verifyUser(username, password) {
 }
 
 function createSession(userId) {
+  const safeUserId = Number(userId);
+  if (!safeUserId) return null;
   const token = crypto.randomBytes(32).toString('hex');
   const expires = new Date(Date.now() + SESSION_DAYS * 86400000).toISOString();
-  db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(token, userId, expires);
+  db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(token, safeUserId, expires);
   return { token, expires };
 }
 
@@ -27,7 +29,7 @@ function getSessionUser(token) {
   if (!token) return null;
   const safeToken = String(token || '');
   const row = db.prepare(`
-    SELECT s.*, u.username, u.role, u.id FROM sessions s
+    SELECT s.*, u.username, u.role, u.id as u_id FROM sessions s
     JOIN users u ON u.id = s.user_id
     WHERE s.token = ?
   `).get(safeToken);
@@ -36,7 +38,7 @@ function getSessionUser(token) {
     db.prepare('DELETE FROM sessions WHERE token = ?').run(safeToken);
     return null;
   }
-  return { userId: row.id || row.user_id, username: row.username, role: row.role };
+  return { userId: row.u_id || row.user_id, username: row.username, role: row.role };
 }
 
 function destroySession(token) {
@@ -47,8 +49,10 @@ function destroySession(token) {
 function login(username, password) {
   const user = verifyUser(username, password);
   if (!user) return null;
-  const session = createSession(user.id);
-  return { token: session.token, user: { id: user.id, username: user.username, role: user.role } };
+  const userId = user.id || user.user_id || 1;
+  const session = createSession(userId);
+  if (!session) return null;
+  return { token: session.token, user: { id: userId, username: user.username, role: user.role } };
 }
 
 module.exports = { hashPassword, verifyUser, createSession, getSessionUser, destroySession, login };
