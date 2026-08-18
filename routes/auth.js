@@ -34,7 +34,7 @@ function getSessionUser(token) {
     db.prepare('DELETE FROM sessions WHERE token=?').run(token);
     return null;
 return { userId: row.id || row.user_id, username: row.username, role: row.role };
-  return { userId: row.user_id, username: row.username, role: row.role };
+  
 }
 
 function destroySession(token) {
