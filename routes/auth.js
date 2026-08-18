@@ -40,4 +40,11 @@ function destroySession(token) {
   db.prepare('DELETE FROM sessions WHERE token=?').run(token);
 }
 
-module.exports = { hashPassword, verifyUser, createSession, getSessionUser, destroySession };
+function login(username, password) {
+  const user = verifyUser(username, password);
+  if (!user) return null;
+  const session = createSession(user.id);
+  return { token: session.token, user: { id: user.id, username: user.username, role: user.role } };
+}
+
+module.exports = { hashPassword, verifyUser, createSession, getSessionUser, destroySession, login };
