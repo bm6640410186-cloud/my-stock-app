@@ -60,8 +60,9 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 401, { error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
       }
 
-      res.setHeader('Set-Cookie', `sid=${result.token}; HttpOnly; Path=/; Max-Age=${7 * 86400}; SameSite=Lax`);
-      return sendJson(res, 200, { user: result.user });
+      // ปรับแต่ง Cookie ให้รองรับทั้ง HTTP/HTTPS และบันทึก Session ได้แน่นหนา
+      res.setHeader('Set-Cookie', `sid=${result.token}; Path=/; Max-Age=${7 * 86400}; SameSite=Lax`);
+      return sendJson(res, 200, { user: result.user, token: result.token });
     }
 
     if (pathname === '/api/auth/me' && req.method === 'GET') {
@@ -70,7 +71,7 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/api/auth/logout' && req.method === 'POST') {
       if (token) authRoutes.destroySession(token);
-      res.setHeader('Set-Cookie', 'sid=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax');
+      res.setHeader('Set-Cookie', 'sid=; Path=/; Max-Age=0; SameSite=Lax');
       return sendJson(res, 200, { success: true });
     }
 
