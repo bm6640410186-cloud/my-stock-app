@@ -24,7 +24,6 @@ function serveStatic(req, res, pathname) {
   fs.readFile(filePath, (err, data) => {
     if (err) {
       if (pathname !== '/' && !pathname.startsWith('/api')) {
-        // SPA fallback -> index.html for client-side view routes like /login handled client side
         return fs.readFile(path.join(PUBLIC_DIR, 'index.html'), (e2, d2) => {
           if (e2) { res.writeHead(404); return res.end('Not found'); }
           res.writeHead(200, { 'Content-Type': MIME['.html'] });
@@ -55,106 +54,96 @@ const server = http.createServer(async (req, res) => {
     // ---- Auth (ไม่ต้อง login) ----
     if (pathname === '/api/auth/login' && req.method === 'POST') {
       const body = await parseBody(req);
-      const result = await authRoutes.login(body);
+      const result = await authRoutes.login(body.username, body.password);
+      
+      if (!result) {
+        return sendJson(res, 401, { error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' });
+      }
+
       res.setHeader('Set-Cookie', `sid=${result.token}; HttpOnly; Path=/; Max-Age=${7 * 86400}; SameSite=Lax`);
       return sendJson(res, 200, { user: result.user });
     }
 
-    // ---- ทุก endpoint ถัดจากนี้ต้อง login ----
-    if (!user) throw new ApiError(401, MSG.UNAUTHORIZED);
+    if (pathname === '/api/auth/me' && req.method === 'GET') {
+      return sendJson(res, 200, { user: user || null });
+    }
 
     if (pathname === '/api/auth/logout' && req.method === 'POST') {
-      await authRoutes.logout(token);
-      res.setHeader('Set-Cookie', 'sid=; HttpOnly; Path=/; Max-Age=0');
-      return sendJson(res, 200, { ok: true });
-    }
-    if (pathname === '/api/me' && req.method === 'GET') {
-      return sendJson(res, 200, { username: user.username, role: user.role });
+      if (token) authRoutes.destroySession(token);
+      res.setHeader('Set-Cookie', 'sid=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax');
+      return sendJson(res, 200, { success: true });
     }
 
-    // ---- Dashboard / AI ----
-    if (pathname === '/api/dashboard' && req.method === 'GET') return sendJson(res, 200, ai.dashboard());
-    if (pathname === '/api/ai/recommendations' && req.method === 'GET') return sendJson(res, 200, ai.recommendations());
-    if (pathname === '/api/ai/deadstock' && req.method === 'GET') return sendJson(res, 200, ai.deadStock());
+    // Protection middleware
+    if (!user) throw new ApiError(MSG.UNAUTHORIZED, 401);
 
     // ---- Products ----
-    let m;
-    if (pathname === '/api/products' && req.method === 'GET') return sendJson(res, 200, products.listProducts(query));
+    if (pathname === '/api/products' && req.method === 'GET') {
+      return sendJson(res, 200, products.listProducts(query));
+    }
     if (pathname === '/api/products' && req.method === 'POST') {
       const body = await parseBody(req);
-      return sendJson(res, 201, products.createProduct(body));
+      return sendJson(res, 201, products.createProduct(body, user));
     }
-    if ((m = pathname.match(/^\/api\/products\/(\d+)$/)) && req.method === 'GET') {
-      return sendJson(res, 200, products.getProduct(m[1]));
-    }
-    if ((m = pathname.match(/^\/api\/products\/(\d+)$/)) && req.method === 'PUT') {
+    if (pathname.startsWith('/api/products/') && req.method === 'PUT') {
+      const id = parseInt(pathname.split('/')[3], 10);
       const body = await parseBody(req);
-      return sendJson(res, 200, products.updateProduct(m[1], body));
+      return sendJson(res, 200, products.updateProduct(id, body, user));
     }
-    if ((m = pathname.match(/^\/api\/products\/(\d+)$/)) && req.method === 'DELETE') {
-      if (user.role !== 'admin') throw new ApiError(403, MSG.FORBIDDEN);
-      return sendJson(res, 200, products.deleteProduct(m[1]));
-    }
-
-    // ---- Stock ----
-    if (pathname === '/api/stock/receive' && req.method === 'POST') {
-      const body = await parseBody(req);
-      return sendJson(res, 200, products.receiveStock(body, user.userId));
-    }
-    if (pathname === '/api/stock/adjust' && req.method === 'POST') {
-      const body = await parseBody(req);
-      return sendJson(res, 200, products.adjustStock(body, user.userId));
+    if (pathname.startsWith('/api/products/') && req.method === 'DELETE') {
+      const id = parseInt(pathname.split('/')[3], 10);
+      return sendJson(res, 200, products.deleteProduct(id, user));
     }
 
     // ---- Sales ----
-    if (pathname === '/api/sales' && req.method === 'GET') return sendJson(res, 200, sales.listSales(query));
+    if (pathname === '/api/sales' && req.method === 'GET') {
+      return sendJson(res, 200, sales.listSales(query));
+    }
     if (pathname === '/api/sales' && req.method === 'POST') {
       const body = await parseBody(req);
-      return sendJson(res, 201, sales.createSale(body, user.userId));
+      return sendJson(res, 201, sales.createSale(body, user));
     }
 
     // ---- Suppliers ----
-    if (pathname === '/api/suppliers' && req.method === 'GET') return sendJson(res, 200, suppliers.listSuppliers());
+    if (pathname === '/api/suppliers' && req.method === 'GET') {
+      return sendJson(res, 200, suppliers.listSuppliers());
+    }
     if (pathname === '/api/suppliers' && req.method === 'POST') {
       const body = await parseBody(req);
       return sendJson(res, 201, suppliers.createSupplier(body));
     }
-    if ((m = pathname.match(/^\/api\/suppliers\/(\d+)$/)) && req.method === 'GET') {
-      return sendJson(res, 200, suppliers.getSupplier(m[1]));
-    }
-    if ((m = pathname.match(/^\/api\/suppliers\/(\d+)$/)) && req.method === 'PUT') {
-      const body = await parseBody(req);
-      return sendJson(res, 200, suppliers.updateSupplier(m[1], body));
-    }
-    if ((m = pathname.match(/^\/api\/suppliers\/(\d+)$/)) && req.method === 'DELETE') {
-      if (user.role !== 'admin') throw new ApiError(403, MSG.FORBIDDEN);
-      return sendJson(res, 200, suppliers.deleteSupplier(m[1]));
-    }
 
     // ---- Purchase Orders ----
-    if (pathname === '/api/purchase-orders' && req.method === 'GET') return sendJson(res, 200, po.listPurchaseOrders());
+    if (pathname === '/api/purchase-orders' && req.method === 'GET') {
+      return sendJson(res, 200, po.listPOs());
+    }
     if (pathname === '/api/purchase-orders' && req.method === 'POST') {
       const body = await parseBody(req);
-      return sendJson(res, 201, po.createPurchaseOrder(body, user.userId));
+      return sendJson(res, 201, po.createPO(body, user));
     }
-    if ((m = pathname.match(/^\/api\/purchase-orders\/(\d+)$/)) && req.method === 'GET') {
-      return sendJson(res, 200, po.getPurchaseOrder(m[1]));
-    }
-    if ((m = pathname.match(/^\/api\/purchase-orders\/(\d+)\/status$/)) && req.method === 'PUT') {
-      const body = await parseBody(req);
-      return sendJson(res, 200, po.updateStatus(m[1], body, user.userId));
+    if (pathname.startsWith('/api/purchase-orders/') && pathname.endsWith('/receive') && req.method === 'POST') {
+      const id = parseInt(pathname.split('/')[3], 10);
+      return sendJson(res, 200, po.receivePO(id, user));
     }
 
-    throw new ApiError(404, 'ไม่พบ endpoint นี้');
+    // ---- AI ----
+    if (pathname === '/api/ai/forecast' && req.method === 'GET') {
+      return sendJson(res, 200, await ai.getForecast());
+    }
+    if (pathname === '/api/ai/reorder-suggestions' && req.method === 'GET') {
+      return sendJson(res, 200, await ai.getReorderSuggestions());
+    }
+
+    throw new ApiError('Not Found', 404);
   } catch (err) {
-    if (err instanceof ApiError) return sendJson(res, err.status, { error: err.message });
+    if (err instanceof ApiError) {
+      return sendJson(res, err.statusCode, { error: err.message });
+    }
     console.error(err);
-    return sendJson(res, 500, { error: MSG.SERVER_ERROR });
+    return sendJson(res, 500, { error: MSG.SERVER_ERROR || 'Internal Server Error' });
   }
 });
 
 server.listen(PORT, () => {
-  console.log(`StockUniform AI server running at http://localhost:${PORT}`);
+  console.log(`StockUniform AI server running on http://localhost:${PORT}`);
 });
-
-module.exports = { server };
