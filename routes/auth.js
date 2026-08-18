@@ -24,15 +24,16 @@ function createSession(userId) {
 function getSessionUser(token) {
   if (!token) return null;
   const row = db.prepare(`
-    SELECT s.*, u.username, u.role, u.user_id FROM sessions s
-    JOIN users u ON u.user_id = s.user_id
+ SELECT s.*, u.username, u.role, u.id FROM sessions s
+   JOIN users u ON u.id = s.user_id
+
     WHERE s.token = ?
   `).get(token);
   if (!row) return null;
   if (new Date(row.expires_at) < new Date()) {
     db.prepare('DELETE FROM sessions WHERE token=?').run(token);
     return null;
-  }
+return { userId: row.id || row.user_id, username: row.username, role: row.role };
   return { userId: row.user_id, username: row.username, role: row.role };
 }
 
