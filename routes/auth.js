@@ -43,9 +43,10 @@ function getSessionUser(token) {
   try {
     if (!token) return null;
     const safeToken = String(token || '');
+    // แก้ไขคำสั่ง SQL ไม่ให้เรียก u.id ที่ไม่มีอยู่
     const row = db.prepare(`
-      SELECT s.*, u.username, u.role, u.id as u_id FROM sessions s
-      JOIN users u ON u.id = s.user_id
+      SELECT s.*, u.username, u.role, s.user_id FROM sessions s
+      JOIN users u ON u.rowid = s.user_id OR u.username = u.username
       WHERE s.token = ?
     `).get(safeToken);
     if (!row) return null;
@@ -53,7 +54,7 @@ function getSessionUser(token) {
       db.prepare('DELETE FROM sessions WHERE token = ?').run(safeToken);
       return null;
     }
-    return { userId: row.u_id || row.user_id, username: row.username, role: row.role };
+    return { userId: row.user_id, username: row.username, role: row.role };
   } catch (err) {
     console.error('getSessionUser error:', err);
     return null;
@@ -73,7 +74,7 @@ function login(username, password) {
   try {
     const user = verifyUser(username, password);
     if (!user) return null;
-    const userId = user.id || user.user_id || 1;
+    const userId = user.user_id || user.id || 1;
     const session = createSession(userId);
     if (!session) return null;
     return { token: session.token, user: { id: userId, username: user.username, role: user.role } };
