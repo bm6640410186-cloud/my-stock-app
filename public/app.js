@@ -1,631 +1,137 @@
-// ฟังก์ชันช่วยส่ง Request พร้อมแนบ Token
-async function fetchApi(url, options = {}) {
-  const token = localStorage.getItem('token');
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-    ...options.headers
-  };
-  
-  const res = await fetch(url, { ...options, headers });
-  if (res.status === 401 && !url.includes('/api/auth/login')) {
-    localStorage.removeItem('token');
-    showLoginPage();
-  }
-  return res;
+// สลับการแสดงผลหน้าต่างๆ (Views)
+function switchView(viewName) {
+  document.querySelectorAll('.view').forEach(el => el.style.display = 'none');
+  const target = document.getElementById(`view-${viewName}`);
+  if (target) target.style.display = 'block';
+
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  const activeNav = document.querySelector(`.nav-item[data-view="${viewName}"]`);
+  if (activeNav) activeNav.classList.add('active');
+
+  // โหลดข้อมูลตามหน้าที่เลือก
+  if (viewName === 'dashboard') loadDashboard();
+  if (viewName === 'products') loadProducts();
+  if (viewName === 'receive' || viewName === 'sales') loadProductOptions();
+  if (viewName === 'forecast') loadForecast();
+  if (viewName === 'po') loadPO();
+  if (viewName === 'suppliers') loadSuppliers();
+  if (viewName === 'deadstock') loadDeadStock();
 }
 
-// ตรวจสอบการเข้าสู่ระบบเมื่อเปิดหน้าเว็บ
-async function checkAuth() {
+// API Call Wrapper
+async function api(url, options = {}) {
   try {
-    const res = await fetchApi('/api/auth/me');
-    const data = await res.json();
-    if (data && data.user) {
-      showDashboard(data.user);
-    } else {
-      showLoginPage();
-    }
-  } catch (err) {
-    showLoginPage();
-  }
-}
-
-// ฟังก์ชันจัดการตอนกดปุ่ม Login
-async function handleLogin(username, password) {
-  try {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
+    const res = await fetch(`/api${url}`, {
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      ...options
     });
-    
-    const data = await res.json();
-    if (res.ok && data.user) {
-      if (data.token) {
-        localStorage.setItem('token', data.token);
-      }
-      // ล็อกอินสำเร็จ สลับไปหน้า Dashboard ทันที
-      showDashboard(data.user);
-    } else {
-      alert(data.error || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+    if (res.status === 401) {
+      window.location.href = '/login.html';
+      return null;
     }
+    return await res.json();
   } catch (err) {
-    alert('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+    console.error('API Error:', err);
+    return null;
   }
 }
 
-function showLoginPage() {
-  const loginSection = document.getElementById('login-section') || document.querySelector('.login-container');
-  const appSection = document.getElementById('app-section') || document.getElementById('main-content');
-  if (loginSection) loginSection.style.display = 'block';
-  if (appSection) appSection.style.display = 'none';
+// โหลดข้อมูล Dashboard
+async function loadDashboard() {
+  const forecast = await api('/ai/reorder-recommendations');
+  const deadstock = await api('/ai/deadstock');
+
+  const aiWrap = document.getElementById('aiReorderWrap');
+  if (aiWrap) {
+    if (forecast && forecast.length > 0) {
+      aiWrap.innerHTML = `<ul>${forecast.map(item => `<li><strong>${item.product_name}</strong> - แนะนำสั่งซื้อ ${item.recommended_order_qty} ชิ้น</li>`).join('')}</ul>`;
+    } else {
+      aiWrap.innerHTML = '<p style="color:#888;">ไม่มีรายการเตือนสั่งซื้อเร่งด่วน</p>';
+    }
+  }
+
+  const dsWrap = document.getElementById('deadstockWrap');
+  if (dsWrap) {
+    if (deadstock && deadstock.length > 0) {
+      dsWrap.innerHTML = `<ul>${deadstock.map(item => `<li><strong>${item.product_name}</strong> - ค้างสต็อก ${item.current_stock} ชิ้น</li>`).join('')}</ul>`;
+    } else {
+      dsWrap.innerHTML = '<p style="color:#888;">ไม่มีสินค้าระดับวิกฤต</p>';
+    }
+  }
 }
 
-function showDashboard(user) {
-  const loginSection = document.getElementById('login-section') || document.querySelector('.login-container');
-  const appSection = document.getElementById('app-section') || document.getElementById('main-content');
-  if (loginSection) loginSection.style.display = 'none';
-  if (appSection) appSection.style.display = 'block';
+// โหลดรายชื่อสินค้า
+async function loadProducts() {
+  const products = await api('/products');
+  const wrap = document.getElementById('productsTableWrap');
+  if (!wrap) return;
+
+  if (products && products.length > 0) {
+    wrap.innerHTML = `
+      <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+        <thead>
+          <tr style="border-bottom:2px solid #ccc; text-align:left;">
+            <th>ชื่อสินค้า</th><th>หมวดหมู่</th><th>ไซส์</th><th>คงเหลือ</th><th>ราคาทุน</th><th>ราคาขาย</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${products.map(p => `
+            <tr style="border-bottom:1px solid #eee;">
+              <td style="padding:8px 0;">${p.product_name}</td>
+              <td>${p.category || '-'}</td>
+              <td>${p.size || '-'}</td>
+              <td>${p.current_stock}</td>
+              <td>${p.cost_price} ฿</td>
+              <td>${p.selling_price} ฿</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } else {
+    wrap.innerHTML = '<p style="color:#888; margin-top:10px;">ยังไม่มีรายการสินค้า</p>';
+  }
 }
 
-// เรียกตรวจสถานะเมื่อโหลดหน้าเว็บ
+// ตัวเลือกสินค้าสำหรับหน้า รับเข้า / ขาย
+async function loadProductOptions() {
+  const products = await api('/products');
+  const options = products && products.length > 0
+    ? products.map(p => `<option value="${p.id}">${p.product_name} (${p.size || 'F'}) - คงเหลือ ${p.current_stock}</option>`).join('')
+    : '<option value="">ไม่มีสินค้าในระบบ</option>';
+
+  const rSelect = document.getElementById('receiveProductSelect');
+  const sSelect = document.getElementById('salesProductSelect');
+  if (rSelect) rSelect.innerHTML = options;
+  if (sSelect) sSelect.innerHTML = options;
+}
+
+// Modal Functions
+function openProductForm() { document.getElementById('productModal').style.display = 'flex'; }
+function openSupplierForm() { document.getElementById('supplierModal').style.display = 'flex'; }
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+// Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
-  checkAuth();
-  
-  const loginForm = document.getElementById('login-form') || document.querySelector('form');
-  if (loginForm) {
-    loginForm.addEventListener('submit', (e) => {
+  // เมนูนำทาง Sidebar
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', (e) => {
       e.preventDefault();
-      const usernameInput = document.getElementById('username') || document.querySelector('input[type="text"]');
-      const passwordInput = document.getElementById('password') || document.querySelector('input[type="password"]');
-      if (usernameInput && passwordInput) {
-        handleLogin(usernameInput.value, passwordInput.value);
-      }
+      const view = item.getAttribute('data-view');
+      if (view) switchView(view);
+    });
+  });
+
+  // ปุ่ม Logout
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      await api('/auth/logout', { method: 'POST' });
+      window.location.href = '/login.html';
     });
   }
+
+  // เริ่มต้นที่หน้า Dashboard
+  switchView('dashboard');
 });
-      </div>
-      <div class="field-row">
-        <div class="field"><label>ราคาทุน</label><input type="number" step="0.01" id="f_cost" value="${p ? p.cost_price : 0}"></div>
-        <div class="field"><label>ราคาขาย</label><input type="number" step="0.01" id="f_sell" value="${p ? p.selling_price : 0}"></div>
-      </div>
-      ${!id ? `<div class="field"><label>สต็อกตั้งต้น</label><input type="number" id="f_initstock" value="0" min="0"></div>` : ''}
-      <div class="field"><label>Supplier</label><select id="f_supplier"><option value="">ไม่ระบุ</option>${supOptions}</select></div>
-      <div class="modal-actions">
-        <button type="button" class="btn ghost" onclick="closeModal()">ยกเลิก</button>
-        <button type="submit" class="btn">${id ? 'บันทึกการแก้ไข' : 'เพิ่มสินค้า'}</button>
-      </div>
-    </form>`);
-  document.getElementById('productForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const body = {
-      sku: val('f_sku'), category: val('f_category'), product_name: val('f_name'), size: val('f_size'),
-      color: val('f_color'), cost_price: val('f_cost'), selling_price: val('f_sell'),
-      supplier_id: val('f_supplier') || null,
-    };
-    if (!id) body.initial_stock = val('f_initstock');
-    try {
-      await api(id ? '/products/' + id : '/products', { method: id ? 'PUT' : 'POST', body });
-      toast(id ? 'บันทึกการแก้ไขเรียบร้อย' : 'เพิ่มสินค้าเรียบร้อย', 'success');
-      closeModal(); loadProducts();
-    } catch (err) { toast(err.message, 'error'); }
-  });
-}
-function val(id) { return document.getElementById(id).value; }
-document.getElementById('addProductBtn').addEventListener('click', () => openProductForm(null));
-async function deleteProduct(id) {
-  if (!confirm('ยืนยันการลบสินค้านี้? ประวัติการขายจะยังถูกเก็บไว้ในระบบ')) return;
-  try { await api('/products/' + id, { method: 'DELETE' }); toast('ลบสินค้าเรียบร้อย', 'success'); loadProducts(); }
-  catch (e) { toast(e.message, 'error'); }
-}
-
-/* ============ RECEIVING ============ */
-async function loadReceivingForm() {
-  const products = await api('/products');
-  const sel = document.getElementById('rcvProduct');
-  sel.innerHTML = products.map(p => `<option value="${p.product_id}">${p.product_name} (${p.sku}) — คงเหลือ ${p.current_stock}</option>`).join('');
-}
-document.getElementById('receiveForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  try {
-    await api('/stock/receive', {
-      method: 'POST',
-      body: { product_id: val('rcvProduct'), quantity: val('rcvQty'), reference: val('rcvRef'), note: val('rcvNote') },
-    });
-    toast('บันทึกการรับสินค้าเรียบร้อย', 'success');
-    document.getElementById('receiveForm').reset();
-    loadReceivingForm();
-  } catch (err) { toast(err.message, 'error'); }
-});
-
-/* ============ SALES ============ */
-async function loadSalesView() {
-  const products = await api('/products');
-  const sel = document.getElementById('saleProduct');
-  sel.innerHTML = products.map(p => `<option value="${p.product_id}" data-stock="${p.current_stock}" data-price="${p.selling_price}">${p.product_name} (${p.sku})</option>`).join('');
-  updateSaleStockLabel();
-  const sales = await api('/sales');
-  document.getElementById('salesTableWrap').innerHTML = sales.length ? `
-    <table><thead><tr><th>วันที่</th><th>สินค้า</th><th>จำนวน</th><th>ราคาขาย</th><th>รวม</th></tr></thead>
-    <tbody>${sales.slice(0, 20).map(s => `<tr><td>${s.sold_at}</td><td style="text-align:right">${s.product_name}</td>
-      <td>${s.quantity}</td><td>${fmtBaht(s.selling_price)}</td><td>${fmtBaht(s.quantity * s.selling_price)}</td></tr>`).join('')}</tbody></table>`
-    : `<div class="empty">ยังไม่มีรายการขาย</div>`;
-}
-function updateSaleStockLabel() {
-  const opt = document.getElementById('saleProduct').selectedOptions[0];
-  if (!opt) return;
-  document.getElementById('saleStockLabel').textContent = `คงเหลือ: ${opt.dataset.stock} ชิ้น`;
-  document.getElementById('salePrice').value = opt.dataset.price;
-}
-document.getElementById('saleProduct').addEventListener('change', updateSaleStockLabel);
-document.getElementById('saleForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  try {
-    await api('/sales', { method: 'POST', body: { product_id: val('saleProduct'), quantity: val('saleQty'), selling_price: val('salePrice') } });
-    toast('บันทึกการขายเรียบร้อย', 'success');
-    document.getElementById('saleQty').value = '';
-    loadSalesView();
-  } catch (err) { toast(err.message, 'error'); }
-});
-
-/* ============ AI PURCHASE RECOMMENDATIONS ============ */
-async function loadPurchaseView() {
-  try {
-    const recs = await api('/ai/recommendations');
-    document.getElementById('purchaseList').innerHTML = recs.length ? recs.map(recCardHTML).join('') : `<div class="empty">ไม่มีคำแนะนำสั่งซื้อในขณะนี้ — สต็อกทุกรายการอยู่ในระดับปลอดภัย</div>`;
-  } catch (e) { toast(e.message, 'error'); }
-}
-async function quickCreatePO(productId, qty, supplierId) {
-  if (!supplierId) { toast('สินค้านี้ยังไม่ได้ระบุ Supplier กรุณาระบุก่อนสร้างใบสั่งซื้อ', 'error'); return; }
-  try {
-    await api('/purchase-orders', { method: 'POST', body: { supplier_id: supplierId, items: [{ product_id: productId, quantity: qty }] } });
-    toast('สร้างใบสั่งซื้อ (ฉบับร่าง) เรียบร้อย', 'success');
-    showView('purchaseorders');
-  } catch (e) { toast(e.message, 'error'); }
-}
-
-/* ============ PURCHASE ORDERS ============ */
-const PO_STATUS_LABEL = { draft: 'ฉบับร่าง', ordered: 'สั่งซื้อแล้ว', received: 'รับสินค้าแล้ว', cancelled: 'ยกเลิก' };
-const PO_STATUS_CLS = { draft: 'watch', ordered: 'warn', received: 'ok', cancelled: 'crit' };
-async function loadPurchaseOrders() {
-  try {
-    const orders = await api('/purchase-orders');
-    document.getElementById('poListWrap').innerHTML = orders.length ? orders.map(o => `
-      <div class="rec-card" style="align-items:flex-start;">
-        <div class="rec-body">
-          <div class="rec-title">ใบสั่งซื้อ #${o.purchase_order_id} • ${o.supplier_name}</div>
-          <div class="rec-reason">สร้างเมื่อ ${o.created_at} • ${o.items.length} รายการ • รวม ${fmtBaht(o.total)}</div>
-          <div style="font-size:12px;color:var(--ink-2)">${o.items.map(it => `${it.product_name} × ${it.quantity}`).join(', ')}</div>
-        </div>
-        <div class="rec-action">
-          <span class="tag ${PO_STATUS_CLS[o.status]}">${PO_STATUS_LABEL[o.status]}</span>
-          <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
-            ${o.status === 'draft' ? `<button class="btn small" onclick="changePOStatus(${o.purchase_order_id},'ordered')">ยืนยันสั่งซื้อ</button>` : ''}
-            ${o.status === 'ordered' ? `<button class="btn small" onclick="changePOStatus(${o.purchase_order_id},'received')">รับสินค้าเข้าสต็อก</button>` : ''}
-            ${['draft', 'ordered'].includes(o.status) ? `<button class="btn small ghost" onclick="changePOStatus(${o.purchase_order_id},'cancelled')">ยกเลิก</button>` : ''}
-          </div>
-        </div>
-      </div>`).join('') : `<div class="empty">ยังไม่มีใบสั่งซื้อ</div>`;
-  } catch (e) { toast(e.message, 'error'); }
-}
-async function changePOStatus(id, status) {
-  if (status === 'cancelled' && !confirm('ยืนยันยกเลิกใบสั่งซื้อนี้?')) return;
-  if (status === 'received' && !confirm('ยืนยันรับสินค้า? ระบบจะเพิ่มจำนวนสต็อกให้อัตโนมัติ')) return;
-  try { await api(`/purchase-orders/${id}/status`, { method: 'PUT', body: { status } }); toast('อัปเดตสถานะเรียบร้อย', 'success'); loadPurchaseOrders(); }
-  catch (e) { toast(e.message, 'error'); }
-}
-async function openPOForm() {
-  const [products, suppliers] = await Promise.all([api('/products'), ensureSuppliersLoaded()]);
-  if (!suppliers.length) { toast('กรุณาเพิ่ม Supplier ก่อนสร้างใบสั่งซื้อ', 'error'); return; }
-  openModal(`
-    <h3>สร้างใบสั่งซื้อ</h3>
-    <form id="poForm">
-      <div class="field"><label>Supplier *</label><select id="po_supplier" required>${suppliers.map(s => `<option value="${s.supplier_id}">${s.supplier_name}</option>`).join('')}</select></div>
-      <label style="font-size:12px;color:var(--ink-2);font-weight:500;">รายการสินค้า</label>
-      <div id="poItems"></div>
-      <button type="button" class="btn ghost small" id="addPOItemBtn" style="margin-top:6px;">+ เพิ่มรายการ</button>
-      <div class="modal-actions">
-        <button type="button" class="btn ghost" onclick="closeModal()">ยกเลิก</button>
-        <button type="submit" class="btn">สร้างใบสั่งซื้อ</button>
-      </div>
-    </form>`);
-  const itemsWrap = document.getElementById('poItems');
-  function addRow() {
-    const row = document.createElement('div');
-    row.className = 'po-item-row';
-    row.innerHTML = `
-      <select class="po-product">${products.map(p => `<option value="${p.product_id}">${p.product_name} (${p.sku})</option>`).join('')}</select>
-      <input type="number" class="po-qty" min="1" value="1" placeholder="จำนวน">
-      <button type="button" class="icon-btn danger" onclick="this.parentElement.remove()">✕</button>`;
-    itemsWrap.appendChild(row);
-  }
-  addRow();
-  document.getElementById('addPOItemBtn').addEventListener('click', addRow);
-  document.getElementById('poForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const items = [...itemsWrap.querySelectorAll('.po-item-row')].map(r => ({
-      product_id: r.querySelector('.po-product').value, quantity: r.querySelector('.po-qty').value,
-    }));
-    try {
-      await api('/purchase-orders', { method: 'POST', body: { supplier_id: val('po_supplier'), items } });
-      toast('สร้างใบสั่งซื้อเรียบร้อย', 'success'); closeModal(); loadPurchaseOrders();
-    } catch (err) { toast(err.message, 'error'); }
-  });
-}
-document.getElementById('addPOBtn').addEventListener('click', openPOForm);
-
-/* ============ SUPPLIERS ============ */
-async function loadSuppliers() {
-  try {
-    suppliersCache = await api('/suppliers');
-    document.getElementById('suppliersTableWrap').innerHTML = suppliersCache.length ? `
-      <table><thead><tr><th>ชื่อ Supplier</th><th>Lead Time</th><th>ติดต่อ</th><th>สินค้า</th><th>ใบสั่งซื้อ</th><th></th></tr></thead>
-      <tbody>${suppliersCache.map(s => `<tr>
-        <td style="text-align:right;font-weight:500">${s.supplier_name}</td><td>${s.lead_time} วัน</td>
-        <td>${s.contact || '-'}</td><td>${s.product_count}</td><td>${s.po_count}</td>
-        <td><div class="actions-cell">
-          <button class="icon-btn" onclick="openSupplierForm(${s.supplier_id})">แก้ไข</button>
-          <button class="icon-btn danger" onclick="deleteSupplier(${s.supplier_id})">ลบ</button>
-        </div></td></tr>`).join('')}</tbody></table>`
-      : `<div class="empty">ยังไม่มี Supplier — เพิ่ม Supplier ก่อนเพื่อผูกกับสินค้า</div>`;
-  } catch (e) { toast(e.message, 'error'); }
-}
-function openSupplierForm(id) {
-  const s = id ? suppliersCache.find(x => x.supplier_id === id) : null;
-  openModal(`
-    <h3>${id ? 'แก้ไข Supplier' : 'เพิ่ม Supplier'}</h3>
-    <form id="supplierForm">
-      <div class="field"><label>ชื่อ Supplier *</label><input id="s_name" value="${s ? s.supplier_name : ''}" required></div>
-      <div class="field"><label>Lead Time (วัน) *</label><input type="number" id="s_lead" min="1" value="${s ? s.lead_time : 7}" required></div>
-      <div class="field"><label>ช่องทางติดต่อ</label><input id="s_contact" value="${s ? s.contact || '' : ''}"></div>
-      <div class="modal-actions"><button type="button" class="btn ghost" onclick="closeModal()">ยกเลิก</button>
-        <button type="submit" class="btn">${id ? 'บันทึก' : 'เพิ่ม Supplier'}</button></div>
-    </form>`);
-  document.getElementById('supplierForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-      await api(id ? '/suppliers/' + id : '/suppliers', { method: id ? 'PUT' : 'POST', body: { supplier_name: val('s_name'), lead_time: val('s_lead'), contact: val('s_contact') } });
-      toast('บันทึกเรียบร้อย', 'success'); closeModal(); loadSuppliers();
-    } catch (err) { toast(err.message, 'error'); }
-  });
-}
-document.getElementById('addSupplierBtn').addEventListener('click', () => openSupplierForm(null));
-async function deleteSupplier(id) {
-  if (!confirm('ยืนยันการลบ Supplier นี้?')) return;
-  try { await api('/suppliers/' + id, { method: 'DELETE' }); toast('ลบเรียบร้อย', 'success'); loadSuppliers(); }
-  catch (e) { toast(e.message, 'error'); }
-}
-
-/* ============ DEAD STOCK ============ */
-async function loadDeadStock() {
-  try {
-    const list = await api('/ai/deadstock');
-    document.getElementById('deadstockTableWrap').innerHTML = list.length ? `
-      <table><thead><tr><th>สินค้า</th><th>คงเหลือ</th><th>ขายล่าสุด</th><th>ไม่ขาย (วัน)</th><th>มูลค่าจม</th><th>ระดับ</th></tr></thead>
-      <tbody>${list.map(d => `<tr><td style="text-align:right">${d.product_name} (${d.size})</td><td>${fmt(d.current_stock)}</td>
-        <td>${d.last_sale_at || 'ไม่เคยขาย'}</td><td>${d.days_since_last_sale}</td><td>${fmtBaht(d.value_at_risk)}</td>
-        <td><span class="tag ${d.cls}">${d.level}</span></td></tr>`).join('')}</tbody></table>`
-      : `<div class="empty">ไม่มีสินค้าค้างสต็อก</div>`;
-  } catch (e) { toast(e.message, 'error'); }
-}
-
-/* ============ INIT ============ */
-document.getElementById('logoutBtn').addEventListener('click', async () => {
-  await api('/auth/logout', { method: 'POST' });
-  window.location.href = '/login.html';
-});
-(async function init() {
-  try {
-    const me = await api('/me');
-    document.getElementById('whoami').textContent = `${me.username} (${me.role === 'admin' ? 'เจ้าของร้าน' : 'พนักงาน'})`;
-    loadDashboard();
-  } catch (e) { /* redirected to login already */ }
-})();
-
-<!DOCTYPE html>
-<html lang="th">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>StockUniform AI - ระบบจัดการสต็อกร้านชุดนักศึกษา</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css">
-</head>
-<body>
-<div id="toastHost"></div>
-
-<div class="app">
-  <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-mark">SU</div>
-      <div class="brand-name">StockUniform AI</div>
-      <div class="brand-sub">ระบบจัดการสต็อกร้านชุดนักศึกษา</div>
-    </div>
-    <nav id="navList">
-      <button class="nav-item active" data-view="dashboard">แดชบอร์ด</button>
-      <button class="nav-item" data-view="products">สินค้าและสต็อก</button>
-      <button class="nav-item" data-view="receiving">รับสินค้าเข้า</button>
-      <button class="nav-item" data-view="sales">ขายสินค้า</button>
-      <button class="nav-item" data-view="purchase">คำแนะนำสั่งซื้อ (AI)</button>
-      <button class="nav-item" data-view="purchaseorders">ใบสั่งซื้อ</button>
-      <button class="nav-item" data-view="suppliers">Supplier</button>
-      <button class="nav-item" data-view="deadstock">สินค้าค้างสต็อก</button>
-    </nav>
-    <div class="sidebar-foot">
-      <span id="whoami"></span>
-      <button class="logout-btn" id="logoutBtn">ออกจากระบบ</button>
-    </div>
-  </aside>
-
-  <main>
-    <!-- DASHBOARD -->
-    <section class="view active" id="view-dashboard">
-      <div class="topbar"><div><h1>ภาพรวมร้านค้า</h1><div class="sub">ข้อมูลจากฐานข้อมูลจริงแบบเรียลไทม์</div></div></div>
-      <div class="kpi-row" id="kpiRow"><div class="skeleton" style="height:70px"></div></div>
-      <section class="block">
-        <div class="block-head"><h2>คำแนะนำสั่งซื้อเร่งด่วนจาก AI</h2><button class="link" data-goto="purchase">ดูทั้งหมด →</button></div>
-        <div id="dashRecs"></div>
-      </section>
-      <section class="block">
-        <div class="block-head"><h2>สินค้าค้างสต็อกวิกฤต</h2><button class="link" data-goto="deadstock">ดูทั้งหมด →</button></div>
-        <div id="dashDead"></div>
-      </section>
-    </section>
-
-    <!-- PRODUCTS -->
-    <section class="view" id="view-products">
-      <div class="topbar">
-        <div><h1>สินค้าและสต็อก</h1><div class="sub" id="productsCount"></div></div>
-        <button class="btn" id="addProductBtn">+ เพิ่มสินค้า</button>
-      </div>
-      <div class="filter-row">
-        <input type="text" id="searchInput" placeholder="ค้นหาชื่อสินค้าหรือรหัส SKU">
-        <select id="categoryFilter"><option value="">ทุกหมวดหมู่</option></select>
-        <select id="statusFilter">
-          <option value="">ทุกสถานะ</option><option value="out">สินค้าหมด</option><option value="low">ใกล้หมด</option><option value="ok">ปกติ</option>
-        </select>
-      </div>
-      <div id="productsTableWrap"><div class="skeleton" style="height:200px"></div></div>
-    </section>
-
-    <!-- PRODUCT DETAIL -->
-    <section class="view" id="view-productdetail">
-      <div class="topbar"><div><button class="link" data-goto="products">← กลับไปรายการสินค้า</button></div></div>
-      <div id="productDetailBody"></div>
-    </section>
-
-    <!-- RECEIVING -->
-    <section class="view" id="view-receiving">
-      <div class="topbar"><div><h1>รับสินค้าเข้าสต็อก</h1><div class="sub">บันทึกการรับสินค้าจาก Supplier</div></div></div>
-      <form id="receiveForm" style="max-width:460px;">
-        <div class="field"><label>สินค้า *</label><select id="rcvProduct" required></select></div>
-        <div class="field"><label>จำนวนที่รับเข้า *</label><input type="number" id="rcvQty" min="1" required></div>
-        <div class="field"><label>เลขที่เอกสาร</label><input type="text" id="rcvRef" placeholder="เช่น INV-2026-001"></div>
-        <div class="field"><label>หมายเหตุ</label><input type="text" id="rcvNote"></div>
-        <button class="btn block" type="submit">บันทึกการรับสินค้า</button>
-      </form>
-    </section>
-
-    <!-- SALES -->
-    <section class="view" id="view-sales">
-      <div class="topbar"><div><h1>ขายสินค้า / ตัดสต็อก</h1><div class="sub">บันทึกการขายและตัดสต็อกอัตโนมัติ</div></div></div>
-      <form id="saleForm" style="max-width:460px;">
-        <div class="field"><label>สินค้า *</label><select id="saleProduct" required></select></div>
-        <div class="field"><label id="saleStockLabel">คงเหลือ: -</label></div>
-        <div class="field"><label>จำนวนที่ขาย *</label><input type="number" id="saleQty" min="1" required></div>
-        <div class="field"><label>ราคาขาย (บาท/ชิ้น)</label><input type="number" id="salePrice" step="0.01"></div>
-        <button class="btn block" type="submit">บันทึกการขาย</button>
-      </form>
-      <h2 style="font-size:14px;margin:24px 0 10px;color:var(--navy);">รายการขายล่าสุด</h2>
-      <div id="salesTableWrap"></div>
-    </section>
-
-    <!-- PURCHASE AI -->
-    <section class="view" id="view-purchase">
-      <div class="topbar"><div><h1>คำแนะนำสั่งซื้อจาก AI</h1><div class="sub">คำนวณจากยอดขายจริงและสูตร Reorder Point + Safety Stock</div></div></div>
-      <div id="purchaseList"><div class="skeleton" style="height:100px"></div></div>
-      <div class="note">สูตรคำนวณ: จุดสั่งซื้อ = (ยอดขายเฉลี่ย/วัน × ระยะเวลารอสินค้า) + สต็อกปลอดภัย — คำนวณสดจากประวัติการขายจริง 30 วันล่าสุด</div>
-    </section>
-
-    <!-- PURCHASE ORDERS -->
-    <section class="view" id="view-purchaseorders">
-      <div class="topbar">
-        <div><h1>ใบสั่งซื้อ</h1><div class="sub">จัดการใบสั่งซื้อและรับสินค้าเข้าสต็อกอัตโนมัติ</div></div>
-        <button class="btn" id="addPOBtn">+ สร้างใบสั่งซื้อ</button>
-      </div>
-      <div id="poListWrap"><div class="skeleton" style="height:150px"></div></div>
-    </section>
-
-    <!-- SUPPLIERS -->
-    <section class="view" id="view-suppliers">
-      <div class="topbar">
-        <div><h1>จัดการ Supplier</h1></div>
-        <button class="btn" id="addSupplierBtn">+ เพิ่ม Supplier</button>
-      </div>
-      <div id="suppliersTableWrap"><div class="skeleton" style="height:150px"></div></div>
-    </section>
-
-    <!-- DEAD STOCK -->
-    <section class="view" id="view-deadstock">
-      <div class="topbar"><div><h1>วิเคราะห์สินค้าค้างสต็อก</h1><div class="sub">คำนวณจากวันที่ขายล่าสุดจริงในระบบ (เกณฑ์ 30/60/90 วัน)</div></div></div>
-      <div id="deadstockTableWrap"><div class="skeleton" style="height:150px"></div></div>
-    </section>
-  </main>
-</div>
-
-<!-- MODAL -->
-<div class="modal-overlay" id="modalOverlay"><div class="modal" id="modalBody"></div></div>
-
-<script src="/app.js"></script>
-</body>
-</html>
-
-<!DOCTYPE html>
-<html lang="th">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>เข้าสู่ระบบ - StockUniform AI</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/styles.css">
-</head>
-<body>
-<div class="login-wrap">
-  <form class="login-card" id="loginForm">
-    <div class="brand-mark" style="color:#1E2A44;">SU</div>
-    <h1>StockUniform AI</h1>
-    <div class="sub">ระบบจัดการสต็อกร้านชุดนักศึกษา</div>
-    <div class="login-err" id="loginErr"></div>
-    <div class="field">
-      <label>ชื่อผู้ใช้</label>
-      <input type="text" id="username" autocomplete="username" required>
-    </div>
-    <div class="field">
-      <label>รหัสผ่าน</label>
-      <input type="password" id="password" autocomplete="current-password" required>
-    </div>
-    <button class="btn block" type="submit" id="loginBtn">เข้าสู่ระบบ</button>
-    <div class="note" style="margin-top:16px;">ผู้ใช้เริ่มต้น: admin / admin123 (กรุณาเปลี่ยนรหัสผ่านหลังใช้งานครั้งแรก)</div>
-  </form>
-</div>
-<script>
-document.getElementById('loginForm').addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const btn = document.getElementById('loginBtn');
-  const errBox = document.getElementById('loginErr');
-  errBox.style.display = 'none';
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> กำลังเข้าสู่ระบบ...';
-  try{
-    const res = await fetch('/api/auth/login', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ username: document.getElementById('username').value, password: document.getElementById('password').value })
-    });
-    const data = await res.json();
-    if(!res.ok) throw new Error(data.error || 'เข้าสู่ระบบไม่สำเร็จ');
-    window.location.href = '/';
-  }catch(err){
-    errBox.textContent = err.message;
-    errBox.style.display = 'block';
-  }finally{
-    btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ';
-  }
-});
-</script>
-</body>
-</html>
-
-:root{
-  --navy:#1E2A44; --navy-2:#2C3B5C; --navy-light:#EEF1F7;
-  --gold:#B8933E; --gold-light:#F5EBD3; --gold-dark:#7A611F;
-  --cream:#FAF8F3; --paper:#FFFFFF;
-  --ink:#22262F; --ink-2:#5B6272; --ink-3:#8A90A0;
-  --line:#E4E1D8;
-  --red:#B3332B; --red-bg:#FBEAE8;
-  --amber:#9A6B12; --amber-bg:#FBF0DC;
-  --green:#256B4E; --green-bg:#E7F3EC;
-  --radius:10px;
-}
-*{box-sizing:border-box; margin:0; padding:0;}
-body{ font-family:'Noto Sans Thai','Noto Sans',sans-serif; background:var(--cream); color:var(--ink); line-height:1.6; }
-.app{display:flex; min-height:100vh;}
-.sidebar{ width:220px; background:var(--navy); color:#fff; flex-shrink:0; padding:24px 0; display:flex; flex-direction:column; }
-.brand{padding:0 20px 22px; border-bottom:1px solid rgba(255,255,255,.12); margin-bottom:14px;}
-.brand-mark{width:34px;height:34px;border-radius:8px;background:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--navy);font-size:15px;margin-bottom:10px;}
-.brand-name{font-size:14px; font-weight:600;}
-.brand-sub{font-size:11.5px; color:rgba(255,255,255,.55); margin-top:2px;}
-nav{display:flex; flex-direction:column; gap:2px; padding:0 10px; flex:1; overflow-y:auto;}
-.nav-item{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; color:rgba(255,255,255,.72); font-size:13.5px; font-weight:500; cursor:pointer; border:none; background:none; width:100%; font-family:inherit; text-align:right; }
-.nav-item:hover{background:rgba(255,255,255,.06); color:#fff;}
-.nav-item.active{background:rgba(184,147,62,.18); color:var(--gold); font-weight:600;}
-.sidebar-foot{margin-top:auto; padding:14px 20px 4px; font-size:11.5px; color:rgba(255,255,255,.65); border-top:1px solid rgba(255,255,255,.1); padding-top:14px; display:flex; justify-content:space-between; align-items:center; gap:8px;}
-.logout-btn{background:none;border:none;color:rgba(255,255,255,.5);font-size:11px;cursor:pointer;text-decoration:underline;font-family:inherit;}
-main{flex:1; padding:28px 34px; max-width:1180px; width:100%;}
-.topbar{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:22px; flex-wrap:wrap; gap:10px;}
-.topbar h1{font-size:20px; font-weight:700; color:var(--navy);}
-.topbar .sub{font-size:12.5px; color:var(--ink-3); margin-top:3px;}
-.view{display:none;} .view.active{display:block;}
-.kpi-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:24px;}
-.kpi{background:var(--paper); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px;}
-.kpi.warn{background:var(--amber-bg); border-color:transparent;} .kpi.danger{background:var(--red-bg); border-color:transparent;}
-.kpi-label{font-size:12px; color:var(--ink-2); margin-bottom:6px;}
-.kpi.warn .kpi-label{color:var(--amber);} .kpi.danger .kpi-label{color:var(--red);}
-.kpi-value{font-size:23px; font-weight:700; color:var(--navy);}
-.kpi.warn .kpi-value{color:var(--amber);} .kpi.danger .kpi-value{color:var(--red);}
-section.block{margin-bottom:26px;}
-.block-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
-.block-head h2{font-size:14.5px; font-weight:700; color:var(--navy);}
-.block-head .link{font-size:12px; color:var(--gold-dark); cursor:pointer; font-weight:600; background:none; border:none; font-family:inherit;}
-.rec-card{ background:var(--paper); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; margin-bottom:10px; display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
-.rec-card.urgent{border-left:3px solid var(--red);} .rec-card.medium{border-left:3px solid var(--amber);}
-.rec-icon{width:38px;height:38px;border-radius:8px;background:var(--navy-light);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;color:var(--navy);font-weight:700;}
-.rec-body{flex:1; min-width:200px;}
-.rec-title{font-size:13.5px; font-weight:600; margin-bottom:2px;}
-.rec-reason{font-size:12px; color:var(--ink-2); margin-bottom:8px;}
-.rec-formula{display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-family:'IBM Plex Mono',monospace; font-size:11px;}
-.rec-formula .chip{background:var(--navy-light); color:var(--navy-2); padding:3px 8px; border-radius:5px;}
-.rec-formula .op{color:var(--ink-3);}
-.rec-formula .result{background:var(--gold-light); color:var(--gold-dark); font-weight:600;}
-.rec-action{flex-shrink:0; text-align:left;}
-.qty-pill{font-size:18px; font-weight:700; color:var(--navy); text-align:center;}
-.qty-pill .u{font-size:10.5px; font-weight:500; color:var(--ink-3); display:block;}
-.btn{ background:var(--navy); color:#fff; border:none; padding:9px 16px; border-radius:7px; font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; }
-.btn:hover{background:var(--navy-2);} .btn:disabled{opacity:.5; cursor:not-allowed;}
-.btn.ghost{background:transparent; color:var(--navy); border:1px solid var(--line);}
-.btn.ghost:hover{background:var(--navy-light);}
-.btn.danger{background:var(--red);} .btn.danger:hover{background:#902a23;}
-.btn.small{padding:6px 12px; font-size:11.5px;}
-.btn.block{width:100%; margin-top:6px;}
-table{width:100%; border-collapse:collapse; background:var(--paper); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden;}
-th{background:var(--navy-light); color:var(--navy-2); font-size:11.5px; font-weight:600; text-align:right; padding:10px 12px; border-bottom:1px solid var(--line);}
-td{font-size:12.5px; padding:10px 12px; border-bottom:1px solid var(--line); text-align:right; vertical-align:middle;}
-tr:last-child td{border-bottom:none;} tr:hover td{background:#FBFAF7;}
-.tag{font-size:10.5px; font-weight:600; padding:3px 9px; border-radius:20px; display:inline-block;}
-.tag.crit{background:var(--red-bg); color:var(--red);} .tag.warn{background:var(--amber-bg); color:var(--amber);}
-.tag.watch, .tag.info{background:var(--navy-light); color:var(--navy-2);}
-.tag.ok{background:var(--green-bg); color:var(--green);}
-.mono{font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-2);}
-.filter-row{display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;}
-.filter-row select, .filter-row input{ font-family:inherit; font-size:12.5px; padding:8px 10px; border:1px solid var(--line); border-radius:7px; background:var(--paper); color:var(--ink); }
-.filter-row input{flex:1; min-width:160px;}
-.note{font-size:11.5px; color:var(--ink-3); background:var(--navy-light); padding:9px 12px; border-radius:7px; margin-top:14px;}
-.empty{padding:30px; text-align:center; color:var(--ink-3); font-size:13px;}
-.actions-cell{display:flex; gap:6px; justify-content:flex-end;}
-.icon-btn{background:none; border:1px solid var(--line); border-radius:6px; padding:5px 9px; font-size:11px; cursor:pointer; color:var(--ink-2); font-family:inherit;}
-.icon-btn:hover{background:var(--navy-light);} .icon-btn.danger{color:var(--red); border-color:var(--red-bg);}
-
-/* Modal */
-.modal-overlay{position:fixed; inset:0; background:rgba(30,42,68,.45); display:none; align-items:center; justify-content:center; z-index:100; padding:20px;}
-.modal-overlay.active{display:flex;}
-.modal{background:var(--paper); border-radius:12px; width:100%; max-width:480px; max-height:88vh; overflow-y:auto; padding:22px 24px;}
-.modal h3{font-size:16px; font-weight:700; color:var(--navy); margin-bottom:16px;}
-.field{margin-bottom:12px;}
-.field label{display:block; font-size:12px; color:var(--ink-2); margin-bottom:5px; font-weight:500;}
-.field input, .field select, .field textarea{ width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:7px; font-family:inherit; font-size:13px; background:var(--paper); }
-.field .err{color:var(--red); font-size:11.5px; margin-top:4px; display:none;}
-.field.has-error input, .field.has-error select{border-color:var(--red);}
-.field.has-error .err{display:block;}
-.field-row{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
-.modal-actions{display:flex; gap:8px; margin-top:18px; justify-content:flex-end;}
-.po-item-row{display:grid; grid-template-columns:2fr 1fr 30px; gap:8px; margin-bottom:8px; align-items:center;}
-
-/* Toast */
-#toastHost{position:fixed; top:18px; left:50%; transform:translateX(-50%); z-index:200; display:flex; flex-direction:column; gap:8px; align-items:center;}
-.toast{background:var(--navy); color:#fff; padding:10px 18px; border-radius:8px; font-size:12.5px; box-shadow:0 4px 14px rgba(0,0,0,.15);}
-.toast.error{background:var(--red);} .toast.success{background:var(--green);}
-
-.spinner{display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; vertical-align:-2px;}
-@keyframes spin{to{transform:rotate(360deg);}}
-.skeleton{background:linear-gradient(90deg,var(--line) 25%,#f0eee6 37%,var(--line) 63%); background-size:400% 100%; animation:shimmer 1.4s ease infinite; border-radius:6px; height:14px;}
-@keyframes shimmer{0%{background-position:100% 50%;}100%{background-position:0 50%;}}
-
-/* Login page */
-.login-wrap{min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--navy);}
-.login-card{background:var(--paper); border-radius:14px; padding:36px 34px; width:100%; max-width:360px;}
-.login-card .brand-mark{margin:0 auto 14px;}
-.login-card h1{font-size:17px; text-align:center; color:var(--navy); margin-bottom:2px;}
-.login-card .sub{font-size:12px; text-align:center; color:var(--ink-3); margin-bottom:22px;}
-.login-err{background:var(--red-bg); color:var(--red); font-size:12px; padding:9px 12px; border-radius:7px; margin-bottom:14px; display:none;}
-
-@media (max-width:820px){
-  .app{flex-direction:column;} .sidebar{width:100%; flex-direction:row; overflow-x:auto; padding:12px; align-items:center;}
-  .brand{display:none;} nav{flex-direction:row;} .sidebar-foot{display:none;}
-  main{padding:18px;}
 }
