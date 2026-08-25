@@ -4,8 +4,30 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>StockUniform AI - ระบบจัดการสต็อก</title>
-  <link rel="stylesheet" href="style.css">
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; font-family: 'Prompt', sans-serif; }
+    body { margin: 0; padding: 0; background-color: #f4f6f9; color: #333; }
+    .app-container { display: flex; min-height: 100vh; }
+    
+    /* Sidebar Styles */
+    .sidebar { width: 250px; background-color: #1e2530; color: #fff; display: flex; flex-direction: column; flex-shrink: 0; }
+    .brand { padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .brand h2 { margin: 0; font-size: 20px; color: #fff; }
+    .nav-menu { flex: 1; padding: 15px 0; }
+    .nav-item { padding: 12px 20px; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 10px; font-size: 15px; color: #a0aec0; }
+    .nav-item:hover, .nav-item.active { background-color: #2d3748; color: #fff; border-left: 4px solid #d9822b; }
+    .sidebar-footer { padding: 20px; }
+    .btn-logout { width: 100%; padding: 10px; background: #e53e3e; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    
+    /* Main Content */
+    .main-content { flex: 1; padding: 30px; overflow-y: auto; }
+    .btn-primary { background-color: #d9822b; color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    .btn-primary:hover { background-color: #c06f1d; }
+
+    /* Modal Styles */
+    .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+  </style>
 </head>
 <body>
   <div class="app-container">
@@ -41,10 +63,8 @@
 
     <!-- Main Content Area -->
     <main class="main-content">
-      <!-- 1. View Dashboard -->
       <section id="view-dashboard" class="view active-view"></section>
 
-      <!-- 2. View Products & Stock -->
       <section id="view-products" class="view" style="display:none;">
         <div class="header-action" style="display:flex; justify-content:space-between; align-items:center;">
           <h2>จัดการสินค้าและสต็อก</h2>
@@ -53,7 +73,6 @@
         <div id="productsTableWrap"></div>
       </section>
 
-      <!-- 3. View POS (Selling) -->
       <section id="view-pos" class="view" style="display:none;">
         <h2>🛒 ขายสินค้า (POS)</h2>
         <p style="color:#666;">ระบบบันทึกการขายสินค้าหน้าร้าน</p>
@@ -62,13 +81,8 @@
         </div>
       </section>
 
-      <!-- 4. View Deadstock & Low Stock Analytics -->
       <section id="view-deadstock" class="view" style="display:none;"></section>
-
-      <!-- 5. View Receive Products -->
       <section id="view-receive" class="view" style="display:none;"></section>
-
-      <!-- 6. View AI Analytics -->
       <section id="view-ai-analytics" class="view" style="display:none;"></section>
     </main>
   </div>
