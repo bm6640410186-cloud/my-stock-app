@@ -18,7 +18,6 @@ function switchView(viewName) {
   const activeNav = document.querySelector(`.nav-item[data-view="${viewName}"]`);
   if (activeNav) activeNav.classList.add('active');
 
-  // โหลดข้อมูลตามเมนูที่เลือก
   if (viewName === 'dashboard') loadDashboard();
   if (viewName === 'products') loadProducts();
   if (viewName === 'sales') loadSalesPage();
@@ -50,6 +49,116 @@ async function api(url, options = {}) {
   } catch (err) {
     console.error('API Error:', err);
     return null;
+  }
+}
+
+// ตัวแปรเก็บประวัติการขายชั่วคราว
+let salesHistory = [];
+
+// โหลดหน้า บันทึกการขายสินค้า + แสดงตารางสรุปยอดขาย
+async function loadSalesPage() {
+  const products = await api('/products');
+  const target = document.getElementById('view-sales');
+  if (!target) return;
+
+  const totalSalesAmount = salesHistory.reduce((acc, item) => acc + item.total, 0);
+
+  target.innerHTML = `
+    <h2>🛒 บันทึกการขายสินค้า</h2>
+    <p style="color:#666; margin-bottom:20px;">เลือกรายการสินค้าและจำนวนที่ต้องการขายเพื่อบันทึกและตัดสต็อก</p>
+
+    <div style="display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap;">
+      <!-- ฟอร์มบันทึกการขาย -->
+      <div style="background:#fff; padding:25px; border-radius:8px; flex:1; min-width:300px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+        <form id="salesForm">
+          <div style="margin-bottom:15px;">
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">เลือกสินค้าที่ต้องการขาย:</label>
+            <select id="saleProductId" required style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+              <option value="">-- เลือกรายการสินค้า --</option>
+              ${products ? products.map(p => `
+                <option value="${p.id}" ${p.current_stock <= 0 ? 'disabled' : ''}>
+                  ${p.product_name}
+                </option>
+              `).join('') : ''}
+            </select>
+          </div>
+
+          <div style="margin-bottom:20px;">
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">จำนวนที่ขาย (ชิ้น):</label>
+            <input type="number" id="saleQty" min="1" value="1" required style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+          </div>
+
+          <button type="submit" style="width:100%; background:#28a745; color:#fff; border:none; padding:12px; border-radius:4px; font-size:16px; font-weight:bold; cursor:pointer;">
+            บันทึกการขายและตัดสต็อก
+          </button>
+        </form>
+      </div>
+
+      <!-- การ์ดสรุปยอดขาย -->
+      <div style="background:#fff; padding:20px; border-radius:8px; min-width:250px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #28a745;">
+        <span style="color:#666; font-size:14px;">ยอดขายรวมทั้งหมด</span>
+        <h2 style="margin:5px 0 0 0; color:#28a745;">${totalSalesAmount.toLocaleString()} ฿</h2>
+        <span style="color:#888; font-size:12px;">รายการขายทั้งหมด: ${salesHistory.length} รายการ</span>
+      </div>
+    </div>
+
+    <!-- ตารางแสดงประวัติรายการขาย -->
+    <div style="background:#fff; padding:20px; border-radius:8px; margin-top:20px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+      <h3 style="margin-top:0;">📋 ประวัติการขายสินค้า</h3>
+      ${salesHistory.length > 0 ? `
+        <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+          <thead>
+            <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
+              <th style="padding:10px;">รายการสินค้า</th>
+              <th>จำนวนที่ขาย</th>
+              <th>ราคาต่อชิ้น</th>
+              <th>ราคารวม</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${salesHistory.map(s => `
+              <tr style="border-bottom:1px solid #f9f9f9;">
+                <td style="padding:10px;"><strong>${s.product_name}</strong></td>
+                <td>${s.qty} ชิ้น</td>
+                <td>${s.price.toLocaleString()} ฿</td>
+                <td><strong style="color:#28a745;">${s.total.toLocaleString()} ฿</strong></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : '<p style="color:#888; margin-top:10px;">ยังไม่มีรายการบันทึกการขาย</p>'}
+    </div>
+  `;
+
+  const salesForm = document.getElementById('salesForm');
+  if (salesForm) {
+    salesForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const productId = document.getElementById('saleProductId').value;
+      const qty = parseInt(document.getElementById('saleQty').value) || 0;
+
+      const product = products.find(p => p.id == productId);
+      if (!product) return;
+
+      if (qty > product.current_stock) {
+        alert('❌ จำนวนที่ขายมากกว่าสินค้าที่มีอยู่ในสต็อก!');
+        return;
+      }
+
+      // ลดสต็อกสินค้า
+      product.current_stock -= qty;
+
+      // บันทึกประวัติการขาย
+      salesHistory.unshift({
+        product_name: product.product_name,
+        qty: qty,
+        price: product.selling_price || 0,
+        total: qty * (product.selling_price || 0)
+      });
+
+      alert(`✅ บันทึกการขาย ${product.product_name} จำนวน ${qty} ชิ้น เรียบร้อยแล้ว`);
+      loadSalesPage();
+    });
   }
 }
 
@@ -170,65 +279,6 @@ async function loadProducts() {
     `;
   } else {
     wrap.innerHTML = '<p style="color:#888; margin-top:20px;">ยังไม่มีรายการสินค้า</p>';
-  }
-}
-
-// โหลดหน้า บันทึกการขายสินค้า (แสดงเฉพาะชื่อสินค้า)
-async function loadSalesPage() {
-  const products = await api('/products');
-  const target = document.getElementById('view-sales');
-  if (!target) return;
-
-  target.innerHTML = `
-    <h2>🛒 บันทึกการขายสินค้า</h2>
-    <p style="color:#666; margin-bottom:20px;">เลือกรายการสินค้าและจำนวนที่ต้องการขายเพื่อบันทึกและตัดสต็อก</p>
-
-    <div style="background:#fff; padding:25px; border-radius:8px; max-width:550px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-      <form id="salesForm">
-        <div style="margin-bottom:15px;">
-          <label style="display:block; margin-bottom:5px; font-weight:bold;">เลือกสินค้าที่ต้องการขาย:</label>
-          <select id="saleProductId" required style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
-            <option value="">-- เลือกรายการสินค้า --</option>
-            ${products ? products.map(p => `
-              <option value="${p.id}" ${p.current_stock <= 0 ? 'disabled' : ''}>
-                ${p.product_name}
-              </option>
-            `).join('') : ''}
-          </select>
-        </div>
-
-        <div style="margin-bottom:20px;">
-          <label style="display:block; margin-bottom:5px; font-weight:bold;">จำนวนที่ขาย (ชิ้น):</label>
-          <input type="number" id="saleQty" min="1" value="1" required style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
-        </div>
-
-        <button type="submit" style="width:100%; background:#28a745; color:#fff; border:none; padding:12px; border-radius:4px; font-size:16px; font-weight:bold; cursor:pointer;">
-          บันทึกการขายและตัดสต็อก
-        </button>
-      </form>
-    </div>
-  `;
-
-  const salesForm = document.getElementById('salesForm');
-  if (salesForm) {
-    salesForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const productId = document.getElementById('saleProductId').value;
-      const qty = parseInt(document.getElementById('saleQty').value) || 0;
-
-      const product = products.find(p => p.id == productId);
-      if (!product) return;
-
-      if (qty > product.current_stock) {
-        alert('❌ จำนวนที่ขายมากกว่าสินค้าที่มีอยู่ในสต็อก!');
-        return;
-      }
-
-      product.current_stock -= qty;
-
-      alert(`✅ บันทึกการขาย ${product.product_name} จำนวน ${qty} ชิ้น เรียบร้อยแล้ว`);
-      loadSalesPage();
-    });
   }
 }
 
