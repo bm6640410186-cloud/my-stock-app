@@ -55,35 +55,29 @@ async function api(url, options = {}) {
 // ตัวแปรเก็บรายการสินค้า
 let globalProducts = [];
 
-// ฟังก์ชันลบสินค้าถาวร (ยิง API สั่งลบที่ Backend + Database)
+// ฟังก์ชันลบสินค้า (ลบในหน้าจอทันที + พยายามส่งลบไป Backend)
 async function deleteProduct(productId, productName) {
   if (confirm(`คุณต้องการลบสินค้า "${productName}" ออกจากระบบใช่หรือไม่?`)) {
-    try {
-      // ยิง API สั่งลบสินค้าจริงที่เซิร์ฟเวอร์
-      const res = await api(`/products/${productId}`, {
-        method: 'DELETE'
-      });
+    // 1. ลบออกจากรายการในหน้าจอทันที
+    globalProducts = globalProducts.filter(p => p.id != productId);
 
-      // อัปเดตรายการในหน้าจอทันที
-      globalProducts = globalProducts.filter(p => p.id != productId);
-      alert(`🗑️ ลบสินค้า "${productName}" เรียบร้อยแล้ว`);
-      
-      // โหลดข้อมูลในหน้าจอใหม่
-      loadProducts();
+    // 2. พยายามยิง API ไปบอกเซิร์ฟเวอร์ให้ลบ (ถ้ามี)
+    try {
+      await api(`/products/${productId}`, { method: 'DELETE' });
     } catch (err) {
-      console.error(err);
-      // กรณี Backend ยังไม่มี API สั่งลบ ให้ลบในฝั่ง Frontend เพื่อแสดงผลเบื้องต้น
-      globalProducts = globalProducts.filter(p => p.id != productId);
-      alert(`🗑️ ลบสินค้า "${productName}" เรียบร้อยแล้ว`);
-      loadProducts();
+      console.log('ยังไม่ได้เชื่อมต่อ API ลบฝั่ง Backend');
     }
+
+    // 3. แจ้งเตือนและอัปเดตตารางใหม่ทันที
+    alert(`🗑️ ลบสินค้า "${productName}" เรียบร้อยแล้ว`);
+    loadProducts();
   }
 }
 
 // โหลดตารางสินค้า พร้อมปุ่มจัดการ/ลบ
 async function loadProducts() {
   const products = await api('/products');
-  if (products && Array.isArray(products)) {
+  if (products && Array.isArray(products) && products.length > 0) {
     globalProducts = products;
   }
   
@@ -136,7 +130,7 @@ async function loadSalesPage() {
   const target = document.getElementById('view-sales');
   if (!target) return;
 
-  const activeProducts = products ? products.filter(p => globalProducts.some(gp => gp.id == p.id)) : [];
+  const activeProducts = products ? products.filter(p => globalProducts.some(gp => gp.id == p.id)) : globalProducts;
   const totalSalesAmount = salesHistory.reduce((acc, item) => acc + item.total, 0);
 
   target.innerHTML = `
