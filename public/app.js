@@ -1,3 +1,4 @@
+// ฟังก์ชันสลับหน้าเมนู
 function switchView(viewName) {
   document.querySelectorAll('.view').forEach(el => {
     el.style.display = 'none';
@@ -17,6 +18,8 @@ function switchView(viewName) {
   const activeNav = document.querySelector(`.nav-item[data-view="${viewName}"]`);
   if (activeNav) activeNav.classList.add('active');
 
+  // โหลดข้อมูลตามเมนูที่เลือก
+  if (viewName === 'dashboard') loadDashboard();
   if (viewName === 'products') loadProducts();
   if (viewName === 'deadstock') loadDeadstock();
   if (viewName === 'receive') loadReceivePage();
@@ -49,6 +52,92 @@ async function api(url, options = {}) {
   }
 }
 
+// โหลดหน้า แดชบอร์ด (Dashboard)
+async function loadDashboard() {
+  const products = await api('/products');
+  const target = document.getElementById('view-dashboard');
+  if (!target) return;
+
+  const threshold = 10;
+  const lowStockItems = products ? products.filter(p => p.current_stock <= threshold) : [];
+  const deadstockItems = products ? products.filter(p => p.current_stock > 0) : [];
+  const totalStock = products ? products.reduce((acc, p) => acc + p.current_stock, 0) : 0;
+
+  target.innerHTML = `
+    <h2>ภาพรวมร้านค้า</h2>
+    <p style="color:#666; margin-bottom:20px;">ข้อมูลจากฐานข้อมูลจริงแบบเรียลไทม์</p>
+
+    <!-- การ์ดสรุปตัวเลข -->
+    <div style="display:flex; gap:15px; margin-bottom:25px;">
+      <div style="flex:1; background:#fff; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #007bff;">
+        <span style="color:#666; font-size:14px;">รายการสินค้าทั้งหมด</span>
+        <h2 style="margin:5px 0 0 0; color:#007bff;">${products ? products.length : 0} รายการ</h2>
+      </div>
+      <div style="flex:1; background:#fff; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #28a745;">
+        <span style="color:#666; font-size:14px;">สต็อกสินค้ารวม</span>
+        <h2 style="margin:5px 0 0 0; color:#28a745;">${totalStock} ชิ้น</h2>
+      </div>
+      <div style="flex:1; background:#fff; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #dc3545;">
+        <span style="color:#666; font-size:14px;">สินค้าต้องสั่งเพิ่ม (AI)</span>
+        <h2 style="margin:5px 0 0 0; color:#dc3545;">${lowStockItems.length} รายการ</h2>
+      </div>
+    </div>
+
+    <!-- ส่วนที่ 1: คำแนะนำสั่งซื้อเร่งด่วนจาก AI -->
+    <div style="background:#fff; padding:20px; border-radius:8px; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+      <h3 style="margin-top:0;">🤖 คำแนะนำสั่งซื้อเร่งด่วนจาก AI</h3>
+      ${lowStockItems.length > 0 ? `
+        <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+          <thead>
+            <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
+              <th style="padding:10px;">ชื่อสินค้า</th>
+              <th>คงเหลือ</th>
+              <th>สถานะ</th>
+              <th>แนะนำสั่งซื้อ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lowStockItems.map(p => `
+              <tr style="border-bottom:1px solid #f9f9f9;">
+                <td style="padding:10px;"><strong>${p.product_name}</strong> (${p.size || '-'})</td>
+                <td><span style="color:${p.current_stock === 0 ? '#d9534f' : '#f0ad4e'}; font-weight:bold;">${p.current_stock}</span></td>
+                <td><span style="color:#d9534f;">${p.current_stock === 0 ? 'หมดสต็อก' : 'สต็อกต่ำ'}</span></td>
+                <td><strong style="color:#5cb85c;">+${50 - p.current_stock} ชิ้น</strong></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : '<p style="color:#5cb85c; margin:10px 0 0 0;">✅ สินค้าทุกรายการอยู่ในระดับปลอดภัย</p>'}
+    </div>
+
+    <!-- ส่วนที่ 2: สินค้าค้างสต็อก -->
+    <div style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+      <h3 style="margin-top:0;">⚠️ สินค้าค้างสต็อกวิกฤต</h3>
+      ${deadstockItems.length > 0 ? `
+        <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+          <thead>
+            <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
+              <th style="padding:10px;">ชื่อสินค้า</th>
+              <th>จำนวนค้างสต็อก</th>
+              <th>มูลค่าทุนรวม</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${deadstockItems.map(p => `
+              <tr style="border-bottom:1px solid #f9f9f9;">
+                <td style="padding:10px;">${p.product_name} (${p.size || '-'})</td>
+                <td><strong>${p.current_stock}</strong> ชิ้น</td>
+                <td>${(p.current_stock * p.cost_price).toLocaleString()} ฿</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : '<p style="color:#888; margin:10px 0 0 0;">ไม่มีสินค้าค้างสต็อก</p>'}
+    </div>
+  `;
+}
+
+// โหลดตารางสินค้า
 async function loadProducts() {
   const products = await api('/products');
   const wrap = document.getElementById('productsTableWrap');
@@ -135,6 +224,7 @@ async function loadAIForecast() {
   `;
 }
 
+// โหลดหน้าสินค้าค้างสต็อก
 async function loadDeadstock() {
   const products = await api('/products');
   const target = document.getElementById('view-deadstock');
