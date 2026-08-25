@@ -3,6 +3,7 @@ const session = require('express-session');
 const path = require('path');
 
 const authRoutes = require('./routes/auth');
+const productRoutes = require('./routes/products');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -19,8 +20,9 @@ app.use(session({
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// เรียกใช้เฉพาะ authRoutes ก่อนเพื่อเปิดระบบล็อกอิน
+// API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/products', productRoutes);
 
 app.get('/', (req, res) => {
   if (!req.session.user) {
