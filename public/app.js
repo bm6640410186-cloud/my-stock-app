@@ -1,10 +1,27 @@
-// Local In-Memory Storage Fallback
-let mockProducts = [
-  { id: "1", name: "กระโปรงพลีทกลีบเล็ก (เอว 25\" ยาว 18\")", category: "กระโปรงนักศึกษา", stock: 50, cost: 150, price: 200 },
-  { id: "2", name: "เสื้อนักศึกษาชาย แขนสั้น [ไม่มีสาบหลัง] (ขาวสว่าง) ไซส์ M", category: "เสื้อนักศึกษา", stock: 12, cost: 160, price: 220 },
-  { id: "3", name: "กระโปรงทรงเอ (เอว 26\" ยาว 16\")", category: "กระโปรงนักศึกษา", stock: 8, cost: 140, price: 190 }
-];
+// โหลดข้อมูลจาก localStorage เพื่อบันทึกถาวร
+function getStoredProducts() {
+  const saved = localStorage.getItem('stock_app_products');
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      console.error("Error parsing local products", e);
+    }
+  }
+  // ค่าเริ่มต้นกรณีใช้งานครั้งแรก
+  return [
+    { id: "1", name: "กระโปรงพลีทกลีบเล็ก (เอว 25\" ยาว 18\")", category: "กระโปรงนักศึกษา", stock: 50, cost: 150, price: 200 },
+    { id: "2", name: "เสื้อนักศึกษาชาย แขนสั้น [ไม่มีสาบหลัง] (ขาวสว่าง) ไซส์ M", category: "เสื้อนักศึกษา", stock: 12, cost: 160, price: 220 },
+    { id: "3", name: "กระโปรงทรงเอ (เอว 26\" ยาว 16\")", category: "กระโปรงนักศึกษา", stock: 8, cost: 140, price: 190 }
+  ];
+}
 
+// บันทึกข้อมูลลง localStorage
+function saveProductsToStorage(products) {
+  localStorage.setItem('stock_app_products', JSON.stringify(products));
+}
+
+let mockProducts = getStoredProducts();
 let globalProducts = [];
 let deadstockViewMode = 'deadstock'; // 'deadstock' หรือ 'all_cost'
 
@@ -40,6 +57,7 @@ function handleLocalFallback(endpoint, options) {
         price: Number(body.price || 0)
       };
       mockProducts.unshift(newProduct);
+      saveProductsToStorage(mockProducts);
       return newProduct;
     } else if (method === 'PUT' || method === 'PATCH') {
       const body = JSON.parse(options.body || '{}');
@@ -48,19 +66,19 @@ function handleLocalFallback(endpoint, options) {
         if (body.stock !== undefined) prod.stock = Number(body.stock);
         if (body.cost !== undefined) prod.cost = Number(body.cost);
         if (body.price !== undefined) prod.price = Number(body.price);
+        saveProductsToStorage(mockProducts);
         return prod;
       }
     } else if (method === 'DELETE') {
       mockProducts = mockProducts.filter(p => String(p.id) !== String(prodId));
+      saveProductsToStorage(mockProducts);
       return { success: true };
     }
   }
   return [];
 }
 
-// ----------------------------------------------------
 // Navigation Router
-// ----------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
   const navItems = document.querySelectorAll('.sidebar .nav-item');
   navItems.forEach(item => {
@@ -111,9 +129,7 @@ function getPStock(p) { return Number(p.stock ?? p.current_stock ?? 0); }
 function getPCost(p) { return Number(p.cost ?? p.cost_price ?? 0); }
 function getPPrice(p) { return Number(p.price ?? p.selling_price ?? 0); }
 
-// ----------------------------------------------------
 // 1. หน้าแดชบอร์ด (Dashboard)
-// ----------------------------------------------------
 async function loadDashboard() {
   const target = document.getElementById('view-dashboard');
   if (!target) return;
@@ -186,9 +202,7 @@ async function loadDashboard() {
   `;
 }
 
-// ----------------------------------------------------
-// 2. หน้าสินค้าและสต็อก (แก้ไขราคาทุน/ขาย + แสดงราคาทุนรวม)
-// ----------------------------------------------------
+// 2. หน้าสินค้าและสต็อก (แก้ไขราคาทุน/ขาย + สรุปราคาทุนรวม)
 async function loadProducts() {
   const tableWrap = document.getElementById('productsTableWrap');
   if (!tableWrap) return;
@@ -198,11 +212,9 @@ async function loadProducts() {
     globalProducts = products;
   }
 
-  // คำนวณราคาทุนรวมทั้งหมดของสต็อก
   const totalStockCost = globalProducts.reduce((sum, p) => sum + (getPStock(p) * getPCost(p)), 0);
 
   tableWrap.innerHTML = `
-    <!-- แสดงสรุปราคาทุนรวมของสินค้าในสต็อกทั้งหมด -->
     <div style="background:#eef6ff; border-left:5px solid #007bff; padding:15px 20px; border-radius:8px; margin-top:15px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
       <div>
         <span style="color:#555; font-size:14px; font-weight:bold;">💰 รวมราคาทุนสินค้าทั้งหมดในสต็อก (Total Capital Value):</span>
@@ -254,7 +266,6 @@ async function loadProducts() {
   `;
 }
 
-// ฟังก์ชันแก้ไขทั้ง จำนวนสต็อก, ราคาทุน, และ ราคาขาย
 async function editProductDetails(id, currentStock, currentCost, currentPrice) {
   const newStockStr = prompt(`1. ระบุจำนวนสต็อกคงเหลือใหม่:`, currentStock);
   if (newStockStr === null) return;
@@ -285,6 +296,7 @@ async function editProductDetails(id, currentStock, currentCost, currentPrice) {
     mockProducts[itemIndex].stock = newStock;
     mockProducts[itemIndex].cost = newCost;
     mockProducts[itemIndex].price = newPrice;
+    saveProductsToStorage(mockProducts);
   }
 
   alert('อัปเดตข้อมูลสินค้าเรียบร้อยแล้ว!');
@@ -296,14 +308,13 @@ async function removeProductItem(id, name) {
     await api(`/products/${id}`, { method: 'DELETE' });
     mockProducts = mockProducts.filter(p => String(p.id) !== String(id));
     globalProducts = globalProducts.filter(p => String(p.id || p._id) !== String(id));
+    saveProductsToStorage(mockProducts);
     alert('ลบสินค้าเรียบร้อยแล้ว!');
     loadProducts();
   }
 }
 
-// ----------------------------------------------------
-// 3. หน้าสินค้าค้างสต็อก (เพิ่มฟังก์ชันแยกดูต้นทุนทั้งหมด)
-// ----------------------------------------------------
+// 3. หน้าสินค้าค้างสต็อก
 async function loadDeadstock() {
   const target = document.getElementById('view-deadstock');
   if (!target) return;
@@ -323,7 +334,6 @@ async function loadDeadstock() {
     <h2>⚠️ วิเคราะห์ต้นทุนสินค้า & สินค้าค้างสต็อก</h2>
     <p style="color:#666; margin-bottom:20px;">ตรวจสอบต้นทุนจมและมูลค่าเงินทุนสินค้าคงเหลือทั้งหมด</p>
 
-    <!-- ปุ่มสลับฟังก์ชันการดูต้นทุน -->
     <div style="display:flex; gap:10px; margin-bottom:20px;">
       <button onclick="switchDeadstockMode('deadstock')" style="padding:10px 20px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; ${deadstockViewMode === 'deadstock' ? 'background:#dc3545; color:#fff;' : 'background:#e0e0e0; color:#333;'}">
         🔥 ดูเฉพาะสินค้าค้างสต็อก (≥ 50 ชิ้น)
@@ -333,7 +343,6 @@ async function loadDeadstock() {
       </button>
     </div>
 
-    <!-- การ์ดสรุปมูลค่าต้นทุน -->
     <div style="display:flex; gap:20px; margin-bottom:25px;">
       <div style="flex:1; border-left:5px solid #dc3545; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
         <span style="color:#666; font-size:14px;">เงินจมสินค้าค้างสต็อก (≥ 50 ชิ้น)</span>
@@ -395,9 +404,7 @@ function switchDeadstockMode(mode) {
   loadDeadstock();
 }
 
-// ----------------------------------------------------
-// 4. หน้าวิเคราะห์สต็อก AI (AI Analytics)
-// ----------------------------------------------------
+// 4. หน้าวิเคราะห์สต็อก AI
 async function loadAIAnalyticsPage() {
   const target = document.getElementById('view-ai-analytics');
   if (!target) return;
@@ -473,9 +480,7 @@ async function loadAIAnalyticsPage() {
   `;
 }
 
-// ----------------------------------------------------
 // ระบบฟอร์มเพิ่มสินค้า
-// ----------------------------------------------------
 function openProductForm() {
   const modal = document.getElementById('productModal');
   if (modal) { modal.style.display = 'block'; toggleCategoryFields(); }
