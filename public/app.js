@@ -85,6 +85,7 @@ async function api(url, options = {}) {
 }
 
 let globalProducts = [];
+let salesHistory = [];
 
 // ฟังก์ชันลบสินค้า
 async function deleteProduct(productId, productName) {
@@ -156,8 +157,6 @@ async function loadProducts() {
   renderProductsTable();
 }
 
-let salesHistory = [];
-
 // โหลดหน้า บันทึกการขายสินค้า
 async function loadSalesPage() {
   if (globalProducts.length === 0) {
@@ -185,7 +184,7 @@ async function loadSalesPage() {
               <option value="">-- เลือกรายการสินค้า --</option>
               ${globalProducts.map(p => `
                 <option value="${p.id}" ${p.current_stock <= 0 ? 'disabled' : ''}>
-                  ${p.product_name} ${p.size ? `(${p.size})` : ''}
+                  ${p.product_name} ${p.size ? `(${p.size})` : ''} (คงเหลือ: ${p.current_stock})
                 </option>
               `).join('')}
             </select>
@@ -303,21 +302,148 @@ async function loadDashboard() {
   `;
 }
 
-async function loadAIForecast() {
-  if (globalProducts.length === 0) {
-    const products = await api('/products');
-    if (products && Array.isArray(products) && products.length > 0) globalProducts = products;
-  }
-}
-
+// โหลดหน้า สินค้าค้างสต็อก (Deadstock)
 async function loadDeadstock() {
   if (globalProducts.length === 0) {
     const products = await api('/products');
     if (products && Array.isArray(products) && products.length > 0) globalProducts = products;
   }
+
+  const target = document.getElementById('view-deadstock');
+  if (!target) return;
+
+  const highStockItems = globalProducts.filter(p => p.current_stock >= 50);
+
+  target.innerHTML = `
+    <h2>⚠️ สินค้าค้างสต็อก (Deadstock Analytics)</h2>
+    <p style="color:#666; margin-bottom:20px;">ตรวจสอบรายการสินค้าที่คงค้างในระบบปริมาณมากและจมทุน</p>
+
+    <div style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+      <h3 style="margin-top:0;">รายการสินค้าคงค้างเยอะ (สต็อก >= 50 ชิ้น)</h3>
+      ${highStockItems.length > 0 ? `
+        <table style="width:100%; border-collapse:collapse; margin-top:15px;">
+          <thead>
+            <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
+              <th style="padding:10px;">ชื่อสินค้า</th>
+              <th>หมวดหมู่</th>
+              <th>ไซส์ / ขนาด</th>
+              <th>จำนวนค้างสต็อก</th>
+              <th>มูลค่าเงินจมทุน (฿)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${highStockItems.map(p => `
+              <tr style="border-bottom:1px solid #f9f9f9;">
+                <td style="padding:10px;"><strong>${p.product_name}</strong></td>
+                <td>${p.category || '-'}</td>
+                <td>${p.size || '-'}</td>
+                <td><strong style="color:#dc3545;">${p.current_stock} ชิ้น</strong></td>
+                <td>${(p.current_stock * p.cost_price).toLocaleString()} ฿</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : '<p style="color:#28a745; margin-top:15px;">✨ เยี่ยมมาก! ไม่มีรายการสินค้าจมทุนในขณะนี้</p>'}
+    </div>
+  `;
 }
 
-function loadReceivePage() {}
+// โหลดหน้า รับสินค้าเข้า (Stock In)
+async function loadReceivePage() {
+  if (globalProducts.length === 0) {
+    const products = await api('/products');
+    if (products && Array.isArray(products) && products.length > 0) globalProducts = products;
+  }
+
+  const target = document.getElementById('view-receive');
+  if (!target) return;
+
+  target.innerHTML = `
+    <h2>📥 บันทึกการรับสินค้าเข้าสต็อก</h2>
+    <p style="color:#666; margin-bottom:20px;">เติมสต็อกสินค้าเดิมที่มีอยู่ในระบบ</p>
+
+    <div style="background:#fff; padding:25px; border-radius:8px; max-width:500px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+      <form id="receiveForm">
+        <div style="margin-bottom:15px;">
+          <label style="display:block; margin-bottom:5px; font-weight:bold;">เลือกสินค้าที่ต้องการเติมสต็อก:</label>
+          <select id="recProductId" required style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+            <option value="">-- เลือกรายการสินค้า --</option>
+            ${globalProducts.map(p => `
+              <option value="${p.id}">${p.product_name} ${p.size ? `(${p.size})` : ''} - สต็อกปัจจุบัน: ${p.current_stock}</option>
+            `).join('')}
+          </select>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <label style="display:block; margin-bottom:5px; font-weight:bold;">จำนวนที่รับเพิ่ม (ชิ้น):</label>
+          <input type="number" id="recQty" min="1" value="1" required style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
+        </div>
+
+        <button type="submit" class="btn-primary" style="width:100%; padding:12px; font-size:16px;">📥 ยืนยันการรับเข้าสต็อก</button>
+      </form>
+    </div>
+  `;
+
+  const receiveForm = document.getElementById('receiveForm');
+  if (receiveForm) {
+    receiveForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const productId = document.getElementById('recProductId').value;
+      const qty = parseInt(document.getElementById('recQty').value) || 0;
+
+      const product = globalProducts.find(p => String(p.id) === String(productId));
+      if (product) {
+        product.current_stock += qty;
+        alert(`✅ เพิ่มสต็อกสินค้า "${product.product_name}" จำนวน ${qty} ชิ้น เรียบร้อยแล้ว`);
+        loadReceivePage();
+      }
+    });
+  }
+}
+
+// โหลดหน้า วิเคราะห์สต็อก (AI)
+async function loadAIForecast() {
+  if (globalProducts.length === 0) {
+    const products = await api('/products');
+    if (products && Array.isArray(products) && products.length > 0) globalProducts = products;
+  }
+
+  const target = document.getElementById('view-forecast');
+  if (!target) return;
+
+  const lowStockItems = globalProducts.filter(p => p.current_stock <= 10);
+
+  target.innerHTML = `
+    <h2>🤖 วิเคราะห์และพยากรณ์สต็อก (Stock AI)</h2>
+    <p style="color:#666; margin-bottom:20px;">ระบบประมวลผลอัจฉริยะเพื่อแนะนำการสั่งซื้อสินค้าล่วงหน้า</p>
+
+    <div style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:20px;">
+      <h3 style="margin-top:0; color:#d9822b;">💡 คำแนะนำการสั่งซื้อด่วน (Reorder Point Suggestions)</h3>
+      ${lowStockItems.length > 0 ? `
+        <table style="width:100%; border-collapse:collapse; margin-top:15px;">
+          <thead>
+            <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
+              <th style="padding:10px;">ชื่อสินค้า</th>
+              <th>คงเหลือ</th>
+              <th>สถานะ AI</th>
+              <th>จำนวนแนะนำให้สั่งเพิ่ม</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lowStockItems.map(p => `
+              <tr style="border-bottom:1px solid #f9f9f9;">
+                <td style="padding:10px;"><strong>${p.product_name}</strong></td>
+                <td><span style="color:#dc3545; font-weight:bold;">${p.current_stock} ชิ้น</span></td>
+                <td><span style="background:#ffe3e3; color:#dc3545; padding:4px 8px; border-radius:4px; font-size:12px; font-weight:bold;">ควรสั่งซื้อด่วน</span></td>
+                <td><strong>+50 ชิ้น</strong></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      ` : '<p style="color:#28a745; margin-top:15px;">✅ สต็อกสินค้าทุกรายการอยู่ในระดับที่เหมาะสม ไม่มีสินค้าวิกฤต</p>'}
+    </div>
+  `;
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.nav-item').forEach(item => {
