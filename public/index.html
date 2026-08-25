@@ -31,7 +31,7 @@
 </head>
 <body>
   <div class="app-container">
-    <!-- Sidebar Navigation -->
+    <!-- Sidebar Navigation (ปรับเหลือ 4 เมนูหลัก) -->
     <aside class="sidebar">
       <div class="brand">
         <h2>StockUniform AI</h2>
@@ -43,14 +43,8 @@
         <div class="nav-item" data-view="products">
           <span class="icon">📦</span> สินค้าและสต็อก
         </div>
-        <div class="nav-item" data-view="pos">
-          <span class="icon">🛒</span> ขายสินค้า
-        </div>
         <div class="nav-item" data-view="deadstock">
           <span class="icon">⚠️</span> สินค้าค้างสต็อก
-        </div>
-        <div class="nav-item" data-view="receive">
-          <span class="icon">📥</span> รับสินค้าเข้า
         </div>
         <div class="nav-item" data-view="ai-analytics">
           <span class="icon">🤖</span> วิเคราะห์สต็อก (AI)
@@ -73,16 +67,7 @@
         <div id="productsTableWrap"></div>
       </section>
 
-      <section id="view-pos" class="view" style="display:none;">
-        <h2>🛒 ขายสินค้า (POS)</h2>
-        <p style="color:#666;">ระบบบันทึกการขายสินค้าหน้าร้าน</p>
-        <div style="background:#fff; padding:20px; border-radius:8px; margin-top:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-          <p style="color:#888; text-align:center;">ฟังก์ชันระบบขายหน้าร้าน (พร้อมใช้งานในการอัปเดตถัดไป)</p>
-        </div>
-      </section>
-
       <section id="view-deadstock" class="view" style="display:none;"></section>
-      <section id="view-receive" class="view" style="display:none;"></section>
       <section id="view-ai-analytics" class="view" style="display:none;"></section>
     </main>
   </div>
@@ -175,7 +160,6 @@
           <input type="text" id="pSize" placeholder="เช่น ฟรีไซส์" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
         </div>
 
-        <!-- ฟิลด์ตัวเลข พิมพ์ทับได้ทันที -->
         <div style="display:flex; gap:10px; margin-bottom:15px;">
           <div style="flex:1;">
             <label style="display:block; margin-bottom:5px; font-weight:bold;">จำนวนสต็อก:</label>
