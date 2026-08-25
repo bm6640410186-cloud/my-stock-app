@@ -52,15 +52,73 @@ async function api(url, options = {}) {
   }
 }
 
-// ตัวแปรเก็บประวัติการขายชั่วคราว
+// ตัวแปรเก็บรายการสินค้าในระบบ
+let globalProducts = [];
+
+// ฟังก์ชันลบสินค้า
+async function deleteProduct(productId, productName) {
+  if (confirm(`คุณต้องการลบสินค้า "${productName}" ใช่หรือไม่?`)) {
+    globalProducts = globalProducts.filter(p => p.id != productId);
+    alert(`🗑️ ลบสินค้า "${productName}" เรียบร้อยแล้ว`);
+    loadProducts();
+  }
+}
+
+// โหลดตารางสินค้า พร้อมปุ่มจัดการ/ลบ
+async function loadProducts() {
+  const products = await api('/products');
+  if (products) globalProducts = products;
+  
+  const wrap = document.getElementById('productsTableWrap');
+  if (!wrap) return;
+
+  if (globalProducts && globalProducts.length > 0) {
+    wrap.innerHTML = `
+      <table style="width:100%; border-collapse:collapse; margin-top:15px; background:#fff; border-radius:8px; padding:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+        <thead>
+          <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
+            <th style="padding:12px;">ชื่อสินค้า</th>
+            <th>หมวดหมู่</th>
+            <th>ไซส์</th>
+            <th>คงเหลือ</th>
+            <th>ราคาทุน</th>
+            <th>ราคาขาย</th>
+            <th style="text-align:center;">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${globalProducts.map(p => `
+            <tr style="border-bottom:1px solid #f9f9f9;">
+              <td style="padding:12px;"><strong>${p.product_name}</strong></td>
+              <td>${p.category || '-'}</td>
+              <td>${p.size || '-'}</td>
+              <td><strong>${p.current_stock}</strong></td>
+              <td>${p.cost_price} ฿</td>
+              <td>${p.selling_price} ฿</td>
+              <td style="text-align:center;">
+                <button onclick="deleteProduct('${p.id}', '${p.product_name}')" style="background:#dc3545; color:#fff; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer;">
+                  🗑️ ลบ
+                </button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } else {
+    wrap.innerHTML = '<p style="color:#888; margin-top:20px;">ยังไม่มีรายการสินค้า</p>';
+  }
+}
+
 let salesHistory = [];
 
-// โหลดหน้า บันทึกการขายสินค้า + แสดงตารางสรุปยอดขาย
+// โหลดหน้า บันทึกการขายสินค้า
 async function loadSalesPage() {
   const products = await api('/products');
   const target = document.getElementById('view-sales');
   if (!target) return;
 
+  const activeProducts = products ? products.filter(p => globalProducts.some(gp => gp.id == p.id)) : [];
   const totalSalesAmount = salesHistory.reduce((acc, item) => acc + item.total, 0);
 
   target.innerHTML = `
@@ -68,18 +126,17 @@ async function loadSalesPage() {
     <p style="color:#666; margin-bottom:20px;">เลือกรายการสินค้าและจำนวนที่ต้องการขายเพื่อบันทึกและตัดสต็อก</p>
 
     <div style="display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap;">
-      <!-- ฟอร์มบันทึกการขาย -->
       <div style="background:#fff; padding:25px; border-radius:8px; flex:1; min-width:300px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
         <form id="salesForm">
           <div style="margin-bottom:15px;">
             <label style="display:block; margin-bottom:5px; font-weight:bold;">เลือกสินค้าที่ต้องการขาย:</label>
             <select id="saleProductId" required style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
               <option value="">-- เลือกรายการสินค้า --</option>
-              ${products ? products.map(p => `
+              ${activeProducts.map(p => `
                 <option value="${p.id}" ${p.current_stock <= 0 ? 'disabled' : ''}>
                   ${p.product_name}
                 </option>
-              `).join('') : ''}
+              `).join('')}
             </select>
           </div>
 
@@ -94,7 +151,6 @@ async function loadSalesPage() {
         </form>
       </div>
 
-      <!-- การ์ดสรุปยอดขาย -->
       <div style="background:#fff; padding:20px; border-radius:8px; min-width:250px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #28a745;">
         <span style="color:#666; font-size:14px;">ยอดขายรวมทั้งหมด</span>
         <h2 style="margin:5px 0 0 0; color:#28a745;">${totalSalesAmount.toLocaleString()} ฿</h2>
@@ -102,7 +158,6 @@ async function loadSalesPage() {
       </div>
     </div>
 
-    <!-- ตารางแสดงประวัติรายการขาย -->
     <div style="background:#fff; padding:20px; border-radius:8px; margin-top:20px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
       <h3 style="margin-top:0;">📋 ประวัติการขายสินค้า</h3>
       ${salesHistory.length > 0 ? `
@@ -137,7 +192,7 @@ async function loadSalesPage() {
       const productId = document.getElementById('saleProductId').value;
       const qty = parseInt(document.getElementById('saleQty').value) || 0;
 
-      const product = products.find(p => p.id == productId);
+      const product = activeProducts.find(p => p.id == productId);
       if (!product) return;
 
       if (qty > product.current_stock) {
@@ -145,10 +200,8 @@ async function loadSalesPage() {
         return;
       }
 
-      // ลดสต็อกสินค้า
       product.current_stock -= qty;
 
-      // บันทึกประวัติการขาย
       salesHistory.unshift({
         product_name: product.product_name,
         qty: qty,
@@ -164,7 +217,7 @@ async function loadSalesPage() {
 
 // โหลดหน้า แดชบอร์ด (Dashboard)
 async function loadDashboard() {
-  const products = await api('/products');
+  const products = globalProducts.length > 0 ? globalProducts : await api('/products');
   const target = document.getElementById('view-dashboard');
   if (!target) return;
 
@@ -244,47 +297,9 @@ async function loadDashboard() {
   `;
 }
 
-// โหลดตารางสินค้า
-async function loadProducts() {
-  const products = await api('/products');
-  const wrap = document.getElementById('productsTableWrap');
-  if (!wrap) return;
-
-  if (products && products.length > 0) {
-    wrap.innerHTML = `
-      <table style="width:100%; border-collapse:collapse; margin-top:15px; background:#fff; border-radius:8px; padding:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-        <thead>
-          <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
-            <th style="padding:12px;">ชื่อสินค้า</th>
-            <th>หมวดหมู่</th>
-            <th>ไซส์</th>
-            <th>คงเหลือ</th>
-            <th>ราคาทุน</th>
-            <th>ราคาขาย</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${products.map(p => `
-            <tr style="border-bottom:1px solid #f9f9f9;">
-              <td style="padding:12px;">${p.product_name}</td>
-              <td>${p.category || '-'}</td>
-              <td>${p.size || '-'}</td>
-              <td><strong>${p.current_stock}</strong></td>
-              <td>${p.cost_price} ฿</td>
-              <td>${p.selling_price} ฿</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    `;
-  } else {
-    wrap.innerHTML = '<p style="color:#888; margin-top:20px;">ยังไม่มีรายการสินค้า</p>';
-  }
-}
-
 // โหลดระบบคำแนะนำ AI
 async function loadAIForecast() {
-  const products = await api('/products');
+  const products = globalProducts.length > 0 ? globalProducts : await api('/products');
   const target = document.getElementById('view-forecast');
   if (!target) return;
 
@@ -333,7 +348,7 @@ async function loadAIForecast() {
 
 // โหลดหน้าสินค้าค้างสต็อก
 async function loadDeadstock() {
-  const products = await api('/products');
+  const products = globalProducts.length > 0 ? globalProducts : await api('/products');
   const target = document.getElementById('view-deadstock');
   if (!target) return;
 
@@ -403,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
     productForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const newProduct = {
+        id: Date.now().toString(),
         product_name: document.getElementById('pName').value,
         category: document.getElementById('pCategory').value,
         size: document.getElementById('pSize').value,
@@ -411,15 +427,9 @@ document.addEventListener('DOMContentLoaded', () => {
         selling_price: parseFloat(document.getElementById('pPrice').value) || 0
       };
 
-      const res = await api('/products', {
-        method: 'POST',
-        body: JSON.stringify(newProduct)
-      });
-
-      if (res) {
-        closeProductForm();
-        loadProducts();
-      }
+      globalProducts.push(newProduct);
+      closeProductForm();
+      loadProducts();
     });
   }
 
