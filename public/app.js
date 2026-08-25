@@ -54,13 +54,18 @@ function switchView(viewName) {
     targetView.style.display = 'block';
   }
 
-  // เรียกโหลดข้อมูลประจำหน้า
   if (viewName === 'dashboard') loadDashboard();
   else if (viewName === 'products') loadProducts();
   else if (viewName === 'deadstock') loadDeadstock();
   else if (viewName === 'receive') loadReceivePage();
   else if (viewName === 'ai-analytics') loadAIAnalyticsPage();
 }
+
+// Helper ดึงค่าต่างๆ ของสินค้าอย่างยืดหยุ่น
+function getPName(p) { return p.product_name || p.name || `${p.category || ''} ${p.skirt_style || p.shirt_gender || ''}`; }
+function getPStock(p) { return Number(p.current_stock ?? p.stock ?? 0); }
+function getPCost(p) { return Number(p.cost_price ?? p.cost ?? 0); }
+function getPPrice(p) { return Number(p.selling_price ?? p.price ?? 0); }
 
 // ----------------------------------------------------
 // 1. หน้าแดชบอร์ด (Dashboard)
@@ -74,16 +79,15 @@ async function loadDashboard() {
     globalProducts = products;
   }
 
-  const totalItems = globalProducts.reduce((sum, p) => sum + Number(p.current_stock || p.stock || 0), 0);
-  const totalValue = globalProducts.reduce((sum, p) => sum + (Number(p.current_stock || p.stock || 0) * Number(p.cost_price || p.cost || 0)), 0);
-  const lowStockItems = globalProducts.filter(p => Number(p.current_stock || p.stock || 0) <= 10);
-  const deadstockItems = globalProducts.filter(p => Number(p.current_stock || p.stock || 0) >= 50);
+  const totalItems = globalProducts.reduce((sum, p) => sum + getPStock(p), 0);
+  const totalValue = globalProducts.reduce((sum, p) => sum + (getPStock(p) * getPCost(p)), 0);
+  const lowStockItems = globalProducts.filter(p => getPStock(p) <= 10);
+  const deadstockItems = globalProducts.filter(p => getPStock(p) >= 50);
 
   target.innerHTML = `
     <h2>📊 แดชบอร์ดภาพรวม</h2>
     <p style="color:#666; margin-bottom:20px;">ยินดีต้อนรับสู่ระบบจัดการสต็อกชุดนักศึกษา</p>
 
-    <!-- การ์ดตัวเลขสรุป -->
     <div style="display:flex; gap:20px; margin-bottom:25px;">
       <div style="flex:1; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #d9822b;">
         <span style="color:#888; font-size:14px;">รายการสินค้าทั้งหมด</span>
@@ -99,7 +103,6 @@ async function loadDashboard() {
       </div>
     </div>
 
-    <!-- ส่วนวิเคราะห์เพิ่มเติม 2 ส่วน -->
     <div style="display:flex; gap:20px;">
       <div style="flex:1; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
         <h3 style="margin-top:0; color:#dc3545;">⚠️ แจ้งเตือนสินค้าใกล้หมด (≤ 10 ชิ้น)</h3>
@@ -107,7 +110,7 @@ async function loadDashboard() {
           <ul style="padding-left:20px; margin:0;">
             ${lowStockItems.slice(0, 5).map(p => `
               <li style="margin-bottom:8px;">
-                <strong>${p.product_name || p.name}</strong> - เหลือ <span style="color:#dc3545; font-weight:bold;">${p.current_stock || p.stock}</span> ชิ้น
+                <strong>${getPName(p)}</strong> - เหลือ <span style="color:#dc3545; font-weight:bold;">${getPStock(p)}</span> ชิ้น
               </li>
             `).join('')}
           </ul>
@@ -159,10 +162,10 @@ async function loadProducts() {
         </thead>
         <tbody>
           ${globalProducts.map(p => {
-            const stock = Number(p.current_stock || p.stock || 0);
-            const cost = Number(p.cost_price || p.cost || 0);
-            const price = Number(p.selling_price || p.price || 0);
-            const name = p.product_name || p.name || `${p.category || ''} ${p.skirt_style || p.shirt_gender || ''}`;
+            const stock = getPStock(p);
+            const cost = getPCost(p);
+            const price = getPPrice(p);
+            const name = getPName(p);
             const detail = p.shirt_back || p.size || p.waist || '-';
 
             return `
@@ -183,7 +186,7 @@ async function loadProducts() {
 }
 
 // ----------------------------------------------------
-// 3. หน้าสินค้าค้างสต็อก + สินค้าใกล้หมดสต็อก
+// 3. หน้าสินค้าค้างสต็อก (เพิ่มสรุปทุนจม + ระดับความวิกฤต)
 // ----------------------------------------------------
 async function loadDeadstock() {
   const target = document.getElementById('view-deadstock');
@@ -195,77 +198,71 @@ async function loadDeadstock() {
   }
 
   const deadstockThreshold = 50;
-  const lowStockThreshold = 10;
-
-  const highStockItems = globalProducts.filter(p => Number(p.current_stock || p.stock || 0) >= deadstockThreshold);
-  const lowStockItems = globalProducts.filter(p => Number(p.current_stock || p.stock || 0) <= lowStockThreshold);
+  const highStockItems = globalProducts.filter(p => getPStock(p) >= deadstockThreshold);
+  const totalDeadstockCapital = highStockItems.reduce((sum, p) => sum + (getPStock(p) * getPCost(p)), 0);
 
   target.innerHTML = `
-    <h2>⚠️ สรุปสถานะสต็อกสินค้า (Stock Status)</h2>
-    <p style="color:#666; margin-bottom:20px;">วิเคราะห์รายการสินค้าค้างสต็อกและสินค้าที่ต้องเตรียมสั่งเพิ่ม</p>
+    <h2>⚠️ สินค้าค้างสต็อก & วิเคราะห์ทุนจม</h2>
+    <p style="color:#666; margin-bottom:20px;">สรุปรายการสินค้าคงเหลือสูงและระดับความวิกฤตทางการเงิน</p>
 
-    <!-- ส่วนที่ 1: สินค้าใกล้หมดสต็อก -->
-    <div style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:25px; border-top:4px solid #dc3545;">
-      <h3 style="margin-top:0; color:#dc3545;">🛒 สินค้าใกล้หมดสต็อก (น้อยกว่าหรือเท่ากับ ${lowStockThreshold} ชิ้น)</h3>
-      ${lowStockItems.length > 0 ? `
-        <table style="width:100%; border-collapse:collapse; margin-top:15px;">
-          <thead>
-            <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
-              <th style="padding:10px;">ชื่อสินค้า</th>
-              <th>หมวดหมู่</th>
-              <th>จำนวนคงเหลือ</th>
-              <th>สถานะ</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${lowStockItems.map(p => `
-              <tr style="border-bottom:1px solid #f9f9f9;">
-                <td style="padding:10px;"><strong>${p.product_name || p.name}</strong></td>
-                <td>${p.category || '-'}</td>
-                <td><strong style="color:#dc3545;">${p.current_stock || p.stock} ชิ้น</strong></td>
-                <td><span style="background:#f8d7da; color:#721c24; padding:3px 8px; border-radius:4px; font-size:12px;">ควรสั่งเพิ่ม</span></td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      ` : '<p style="color:#888;">ไม่มีรายการสินค้าใกล้หมดสต็อก</p>'}
+    <!-- กล่องสรุปทุนจม -->
+    <div style="background:#fff border-left:5px solid #dc3545; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:25px; display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <span style="color:#666; font-size:14px;">รวมมูลค่าเงินจมทุนสินค้าค้างสต็อก (≥ 50 ชิ้น)</span>
+        <h2 style="margin:5px 0 0 0; color:#dc3545; font-size:28px;">${totalDeadstockCapital.toLocaleString()} บาท</h2>
+      </div>
+      <div>
+        <span style="background:#f8d7da; color:#721c24; padding:8px 16px; border-radius:20px; font-weight:bold; font-size:14px;">
+          ค้างสต็อกรวม ${highStockItems.length} รายการ
+        </span>
+      </div>
     </div>
 
-    <!-- ส่วนที่ 2: สินค้าค้างสต็อก -->
-    <div style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-top:4px solid #ffc107;">
-      <h3 style="margin-top:0; color:#856404;">📦 รายการสินค้าคงค้างเยอะ (สต็อก >= ${deadstockThreshold} ชิ้น)</h3>
+    <!-- ตารางวิเคราะห์ระดับความวิกฤต -->
+    <div style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+      <h3 style="margin-top:0; color:#333;">📦 รายการสินค้าและระดับความวิกฤต</h3>
       ${highStockItems.length > 0 ? `
         <table style="width:100%; border-collapse:collapse; margin-top:15px;">
           <thead>
             <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
               <th style="padding:10px;">ชื่อสินค้า</th>
               <th>หมวดหมู่</th>
-              <th>จำนวนค้างสต็อก</th>
-              <th>มูลค่าเงินจมทุน (฿)</th>
+              <th>จำนวนค้าง (ชิ้น)</th>
+              <th>ทุนจม (บาท)</th>
+              <th>ระดับความวิกฤต</th>
             </tr>
           </thead>
           <tbody>
             ${highStockItems.map(p => {
-              const stock = Number(p.current_stock || p.stock || 0);
-              const cost = Number(p.cost_price || p.cost || 0);
+              const stock = getPStock(p);
+              const cost = getPCost(p);
+              const capital = stock * cost;
+
+              // กำหนดระดับความวิกฤต
+              let badge = '<span style="background:#fff3cd; color:#856404; padding:4px 10px; border-radius:12px; font-size:13px; font-weight:bold;">🟡 วิกฤตปานกลาง</span>';
+              if (stock >= 100) {
+                badge = '<span style="background:#f8d7da; color:#721c24; padding:4px 10px; border-radius:12px; font-size:13px; font-weight:bold;">🔴 วิกฤตสูง</span>';
+              }
+
               return `
                 <tr style="border-bottom:1px solid #f9f9f9;">
-                  <td style="padding:10px;"><strong>${p.product_name || p.name}</strong></td>
+                  <td style="padding:10px;"><strong>${getPName(p)}</strong></td>
                   <td>${p.category || '-'}</td>
-                  <td><strong style="color:#d9822b;">${stock} ชิ้น</strong></td>
-                  <td><strong>${(stock * cost).toLocaleString()} ฿</strong></td>
+                  <td><strong style="color:#d9822b;">${stock}</strong></td>
+                  <td><strong style="color:#dc3545;">${capital.toLocaleString()} ฿</strong></td>
+                  <td>${badge}</td>
                 </tr>
               `;
             }).join('')}
           </tbody>
         </table>
-      ` : '<p style="color:#888;">ไม่พบรายการสินค้าค้างสต็อก</p>'}
+      ` : '<p style="color:#888;">ไม่พบรายการสินค้าค้างสต็อกเกิน 50 ชิ้น</p>'}
     </div>
   `;
 }
 
 // ----------------------------------------------------
-// 4. หน้ารับสินค้าเข้า (Receive Stock)
+// 4. หน้ารับสินค้าเข้า (เลือกระบุรายละเอียดสินค้าในสต็อก)
 // ----------------------------------------------------
 async function loadReceivePage() {
   const target = document.getElementById('view-receive');
@@ -276,36 +273,132 @@ async function loadReceivePage() {
     globalProducts = products;
   }
 
+  // ดึงหมวดหมู่ทั้งหมด
+  const categories = [...new Set(globalProducts.map(p => p.category || 'อื่นๆ'))];
+
   target.innerHTML = `
     <h2>📥 รับสินค้าเข้าสต็อก (Stock In)</h2>
-    <p style="color:#666; margin-bottom:20px;">บันทึกเพิ่มจำนวนสินค้าเข้าคลัง</p>
+    <p style="color:#666; margin-bottom:20px;">บันทึกเพิ่มจำนวนสินค้าเข้าคลัง โดยระบุเลือกตามประเภทสินค้า</p>
 
-    <div style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); max-width:600px;">
+    <div style="background:#fff; padding:25px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); max-width:650px;">
       <form id="receiveForm" onsubmit="handleReceiveSubmit(event)">
+        
+        <!-- ตัวกรองหมวดหมู่ -->
         <div style="margin-bottom:15px;">
-          <label style="display:block; margin-bottom:5px; font-weight:bold;">เลือกสินค้าที่ต้องการรับเข้า:</label>
-          <select id="recvProduct" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
-            ${globalProducts.map(p => `<option value="${p.id || p._id}">${p.product_name || p.name} (คงเหลือ: ${p.current_stock || p.stock || 0})</option>`).join('')}
+          <label style="display:block; margin-bottom:5px; font-weight:bold;">1. เลือกหมวดหมู่สินค้า:</label>
+          <select id="recvCategory" onchange="filterReceiveProducts()" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+            <option value="ALL">-- แสดงทั้งหมด --</option>
+            ${categories.map(c => `<option value="${c}">${c}</option>`).join('')}
           </select>
         </div>
+
+        <!-- ตัวกรองรูปแบบ/ทรง (ถ้าเป็นกระโปรงหรือเสื้อ) -->
+        <div id="recvSubFilterWrap" style="margin-bottom:15px; display:none;">
+          <label style="display:block; margin-bottom:5px; font-weight:bold;">2. กรองทรง/รูปแบบสินค้า:</label>
+          <select id="recvSubFilter" onchange="filterReceiveProducts()" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+          </select>
+        </div>
+
+        <!-- ตัวเลือกสินค้าในสต็อก -->
+        <div style="margin-bottom:15px;">
+          <label style="display:block; margin-bottom:5px; font-weight:bold;">3. เลือกสินค้าที่ต้องการรับเข้า:</label>
+          <select id="recvProduct" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px; font-weight:bold; color:#d9822b;">
+          </select>
+        </div>
+
         <div style="margin-bottom:15px;">
           <label style="display:block; margin-bottom:5px; font-weight:bold;">จำนวนที่รับเข้า (ชิ้น):</label>
           <input type="number" id="recvQty" value="1" min="1" onfocus="this.select()" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
         </div>
+
         <div style="margin-bottom:20px;">
           <label style="display:block; margin-bottom:5px; font-weight:bold;">หมายเหตุ / สาเหตุการรับเข้า:</label>
           <input type="text" id="recvNote" placeholder="เช่น สั่งซื้อเติมสต็อกประจำสัปดาห์" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
         </div>
-        <button type="submit" style="width:100%; padding:12px; background:#28a745; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">📥 บันทึกรับสินค้าเข้าสต็อก</button>
+
+        <button type="submit" style="width:100%; padding:12px; background:#28a745; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:16px; cursor:pointer;">📥 บันทึกรับสินค้าเข้าสต็อก</button>
       </form>
     </div>
   `;
+
+  filterReceiveProducts();
+}
+
+// กรองตัวเลือกสินค้าแบบละเอียด
+function filterReceiveProducts() {
+  const catSelect = document.getElementById('recvCategory');
+  const subWrap = document.getElementById('recvSubFilterWrap');
+  const subSelect = document.getElementById('recvSubFilter');
+  const prodSelect = document.getElementById('recvProduct');
+  if (!catSelect || !prodSelect) return;
+
+  const selectedCat = catSelect.value;
+  let filtered = globalProducts;
+
+  if (selectedCat !== 'ALL') {
+    filtered = filtered.filter(p => (p.category || 'อื่นๆ') === selectedCat);
+
+    // สร้าง Sub filter สำหรับกระโปรงและเสื้อ
+    if (selectedCat === 'กระโปรงนักศึกษา') {
+      const styles = [...new Set(filtered.map(p => p.skirt_style).filter(Boolean))];
+      if (styles.length > 0) {
+        subWrap.style.display = 'block';
+        const currentSub = subSelect.value;
+        subSelect.innerHTML = '<option value="ALL">-- ทุกทรงกระโปรง --</option>' + styles.map(s => `<option value="${s}">${s}</option>`).join('');
+        if (styles.includes(currentSub)) subSelect.value = currentSub;
+        
+        if (subSelect.value !== 'ALL') {
+          filtered = filtered.filter(p => p.skirt_style === subSelect.value);
+        }
+      } else { subWrap.style.display = 'none'; }
+    } else if (selectedCat === 'เสื้อนักศึกษา') {
+      const types = [...new Set(filtered.map(p => p.shirt_gender).filter(Boolean))];
+      if (types.length > 0) {
+        subWrap.style.display = 'block';
+        const currentSub = subSelect.value;
+        subSelect.innerHTML = '<option value="ALL">-- ทุกประเภทเสื้อ --</option>' + types.map(t => `<option value="${t}">${t}</option>`).join('');
+        if (types.includes(currentSub)) subSelect.value = currentSub;
+        
+        if (subSelect.value !== 'ALL') {
+          filtered = filtered.filter(p => p.shirt_gender === subSelect.value);
+        }
+      } else { subWrap.style.display = 'none'; }
+    } else {
+      subWrap.style.display = 'none';
+    }
+  } else {
+    subWrap.style.display = 'none';
+  }
+
+  if (filtered.length === 0) {
+    prodSelect.innerHTML = '<option value="">-- ไม่พบสินค้าในหมวดหมู่นี้ --</option>';
+  } else {
+    prodSelect.innerHTML = filtered.map(p => 
+      `<option value="${p.id || p._id}">${getPName(p)} (คงเหลือเดิม: ${getPStock(p)} ชิ้น)</option>`
+    ).join('');
+  }
 }
 
 async function handleReceiveSubmit(e) {
   e.preventDefault();
-  alert('บันทึกการรับสินค้าเข้าเรียบร้อยแล้ว');
-  loadReceivePage();
+  const prodId = document.getElementById('recvProduct').value;
+  const qty = Number(document.getElementById('recvQty').value);
+
+  if (!prodId) {
+    alert('กรุณาเลือกสินค้าที่ต้องการรับเข้า');
+    return;
+  }
+
+  const res = await api(`/products/${prodId}/stock`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ increment: qty })
+  });
+
+  if (res || res === null) {
+    alert('บันทึกการรับสินค้าเข้าสต็อกเรียบร้อยแล้ว');
+    loadReceivePage();
+  }
 }
 
 // ----------------------------------------------------
@@ -333,7 +426,7 @@ async function loadAIAnalyticsPage() {
 }
 
 // ----------------------------------------------------
-// ระบบฟอร์มเพิ่มสินค้า
+// ระบบฟอร์มเพิ่มสินค้า (แก้ไข Payload บันทึกสินค้าให้ตรงตาม Schema)
 // ----------------------------------------------------
 function openProductForm() {
   const modal = document.getElementById('productModal');
@@ -376,29 +469,45 @@ function toggleCategoryFields() {
 async function handleProductSubmit(e) {
   e.preventDefault();
   const cat = document.getElementById('pCategory').value;
-  let payload = {
-    category: cat,
-    current_stock: Number(document.getElementById('pStock').value),
-    cost_price: Number(document.getElementById('pCost').value),
-    selling_price: Number(document.getElementById('pPrice').value)
-  };
+  const stockVal = Number(document.getElementById('pStock').value);
+  const costVal = Number(document.getElementById('pCost').value);
+  const priceVal = Number(document.getElementById('pPrice').value);
+
+  let pName = '';
+  let extraData = {};
 
   if (cat === 'กระโปรงนักศึกษา') {
-    payload.skirt_style = document.getElementById('pSkirtStyle').value;
-    payload.waist = document.getElementById('pWaist').value;
-    payload.length = document.getElementById('pLength').value;
-    payload.product_name = `กระโปรง ${payload.skirt_style} (เอว ${payload.waist} ยาว ${payload.length})`;
+    const style = document.getElementById('pSkirtStyle').value;
+    const waist = document.getElementById('pWaist').value;
+    const length = document.getElementById('pLength').value;
+    pName = `กระโปรง${style} (เอว ${waist}" ยาว ${length}")`;
+    extraData = { skirt_style: style, waist, length };
   } else if (cat === 'เสื้อนักศึกษา') {
-    payload.shirt_gender = document.getElementById('pShirtGender').value;
-    payload.shirt_sleeve = document.getElementById('pShirtSleeve').value;
-    payload.shirt_back = document.getElementById('pShirtBack').value;
-    payload.shirt_color = document.getElementById('pShirtColor').value;
-    payload.shirt_size = document.getElementById('pShirtSize').value;
-    payload.product_name = `${payload.shirt_gender} ${payload.shirt_sleeve} [${payload.shirt_back}] (${payload.shirt_color})`;
+    const gender = document.getElementById('pShirtGender').value;
+    const sleeve = document.getElementById('pShirtSleeve').value;
+    const back = document.getElementById('pShirtBack').value;
+    const color = document.getElementById('pShirtColor').value;
+    const size = document.getElementById('pShirtSize').value;
+    pName = `${gender} ${sleeve} [${back}] (${color}) ไซส์ ${size}`;
+    extraData = { shirt_gender: gender, shirt_sleeve: sleeve, shirt_back: back, shirt_color: color, shirt_size: size };
   } else {
-    payload.product_name = document.getElementById('pName').value;
-    payload.size = document.getElementById('pSize').value;
+    pName = document.getElementById('pName').value || 'สินค้าทั่วไป';
+    extraData = { size: document.getElementById('pSize').value };
   }
+
+  // ส่งข้อมูลทั้งรูปแบบมาตรฐาน (name, stock, cost, price) และรูปแบบขยาย ให้ครอบคลุมทุก Backend
+  const payload = {
+    name: pName,
+    product_name: pName,
+    category: cat,
+    stock: stockVal,
+    current_stock: stockVal,
+    cost: costVal,
+    cost_price: costVal,
+    price: priceVal,
+    selling_price: priceVal,
+    ...extraData
+  };
 
   const res = await api('/products', {
     method: 'POST',
