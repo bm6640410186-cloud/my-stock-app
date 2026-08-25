@@ -1,3 +1,4 @@
+// ฟังก์ชันสลับหน้าเมนู
 function switchView(viewName) {
   document.querySelectorAll('.view').forEach(el => {
     el.style.display = 'none';
@@ -17,7 +18,10 @@ function switchView(viewName) {
   const activeNav = document.querySelector(`.nav-item[data-view="${viewName}"]`);
   if (activeNav) activeNav.classList.add('active');
 
+  // โหลดข้อมูลตามเมนูที่เลือก
   if (viewName === 'products') loadProducts();
+  if (viewName === 'deadstock') loadDeadstock();
+  if (viewName === 'receive') loadReceivePage();
 }
 
 // ควบคุม Modal ฟอร์มสินค้า
@@ -47,6 +51,7 @@ async function api(url, options = {}) {
   }
 }
 
+// โหลดตารางสินค้า
 async function loadProducts() {
   const products = await api('/products');
   const wrap = document.getElementById('productsTableWrap');
@@ -84,6 +89,58 @@ async function loadProducts() {
   }
 }
 
+// โหลดหน้าสินค้าค้างสต็อก
+async function loadDeadstock() {
+  const products = await api('/products');
+  const target = document.getElementById('view-deadstock');
+  if (!target) return;
+
+  // กรองเฉพาะสินค้าที่มีสต็อกแต่ขายไม่ได้ / สต็อกค้าง
+  const deadstockItems = products ? products.filter(p => p.current_stock > 0) : [];
+
+  target.innerHTML = `
+    <h2>⚠️ สินค้าค้างสต็อก</h2>
+    <p style="color:#666; margin-bottom:15px;">รายการสินค้าที่อยู่ในสต็อกและต้องการการเร่งระบาย</p>
+    ${deadstockItems.length > 0 ? `
+      <table style="width:100%; border-collapse:collapse; background:#fff; border-radius:8px; padding:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+        <thead>
+          <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
+            <th style="padding:12px;">ชื่อสินค้า</th>
+            <th>หมวดหมู่</th>
+            <th>ไซส์</th>
+            <th>จำนวนค้างสต็อก</th>
+            <th>มูลค่ารวม (ทุน)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${deadstockItems.map(p => `
+            <tr style="border-bottom:1px solid #f9f9f9;">
+              <td style="padding:12px;">${p.product_name}</td>
+              <td>${p.category || '-'}</td>
+              <td>${p.size || '-'}</td>
+              <td><span style="color:#d9534f; font-weight:bold;">${p.current_stock}</span></td>
+              <td>${(p.current_stock * p.cost_price).toLocaleString()} ฿</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    ` : '<p style="color:#888;">ไม่มีรายการสินค้าค้างสต็อก</p>'}
+  `;
+}
+
+// โหลดหน้ารับสินค้าเข้า
+function loadReceivePage() {
+  const target = document.getElementById('view-receive');
+  if (!target) return;
+  target.innerHTML = `
+    <h2>📥 รับสินค้าเข้าสต็อก</h2>
+    <div style="background:#fff; padding:20px; border-radius:8px; margin-top:15px; max-width:500px;">
+      <p style="color:#666;">ระบบบันทึกการรับสินค้าเข้าสต็อกเพิ่มจาก Supplier</p>
+      <small style="color:#999;">(ฟังก์ชันบันทึกการรับเข้าพร้อมใช้งานในเวอร์ชันถัดไป)</small>
+    </div>
+  `;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', (e) => {
@@ -102,7 +159,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Submit ฟอร์มสินค้า
   const productForm = document.getElementById('productForm');
   if (productForm) {
     productForm.addEventListener('submit', async (e) => {
