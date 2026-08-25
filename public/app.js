@@ -6,6 +6,7 @@ let mockProducts = [
 ];
 
 let globalProducts = [];
+let deadstockViewMode = 'deadstock'; // 'deadstock' หรือ 'all_cost'
 
 // ฟังก์ชันเรียก API
 async function api(endpoint, options = {}) {
@@ -45,6 +46,8 @@ function handleLocalFallback(endpoint, options) {
       const prod = mockProducts.find(p => String(p.id) === String(prodId));
       if (prod) {
         if (body.stock !== undefined) prod.stock = Number(body.stock);
+        if (body.cost !== undefined) prod.cost = Number(body.cost);
+        if (body.price !== undefined) prod.price = Number(body.price);
         return prod;
       }
     } else if (method === 'DELETE') {
@@ -139,7 +142,7 @@ async function loadDashboard() {
         <h2 style="margin:10px 0 0 0; color:#333;">${totalItems.toLocaleString()} <span style="font-size:16px; font-weight:normal;">ชิ้น</span></h2>
       </div>
       <div style="flex:1; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #17a2b8;">
-        <span style="color:#888; font-size:14px;">มูลค่าสินค้าในสต็อกรวม</span>
+        <span style="color:#888; font-size:14px;">มูลค่าต้นทุนสินค้าในสต็อกรวม</span>
         <h2 style="margin:10px 0 0 0; color:#333;">${totalValue.toLocaleString()} <span style="font-size:16px; font-weight:normal;">บาท</span></h2>
       </div>
     </div>
@@ -170,21 +173,21 @@ async function loadDashboard() {
 
           ${deadstockItems.length > 0 ? `
             <div style="background:#fff3cd; padding:10px; border-radius:6px; border-left:4px solid #ffc107;">
-              <strong style="color:#856404;">🔥 ควรกระตุ้นขาย/ระบายสต็อก:</strong><br>
+              <strong style="color:#856404;">🔥 ควรรีบเคลียร์สต็อก:</strong><br>
               ${deadstockItems.slice(0, 2).map(p => `• ${getPName(p)} (ค้างสต็อก <strong>${getPStock(p)}</strong> ตัว - ควรรีบเคลียร์ <strong>${getPStock(p) - 30}</strong> ตัว)`).join('<br>')}
             </div>
           ` : ''}
 
           ${lowStockItems.length === 0 && deadstockItems.length === 0 ? '<p style="color:#28a745;">✅ สต็อกอยู่ในระดับสมดุล สมบูรณ์ดี</p>' : ''}
         </div>
-        <button onclick="switchView('ai-analytics')" style="background:#6f42c1; color:#fff; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; margin-top:15px;">ดูรายงาน AI แบบละเอียด</button>
+        <button onclick="switchView('ai-analytics')" style="background:#6f42c1; color:#fff; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; margin-top:15px;">ดูรายงาน AI แบบรายละเอียด</button>
       </div>
     </div>
   `;
 }
 
 // ----------------------------------------------------
-// 2. หน้าสินค้าและสต็อก (ฟังก์ชันแก้ไขและลบสินค้า)
+// 2. หน้าสินค้าและสต็อก (แก้ไขราคาทุน/ขาย + แสดงราคาทุนรวม)
 // ----------------------------------------------------
 async function loadProducts() {
   const tableWrap = document.getElementById('productsTableWrap');
@@ -195,8 +198,21 @@ async function loadProducts() {
     globalProducts = products;
   }
 
+  // คำนวณราคาทุนรวมทั้งหมดของสต็อก
+  const totalStockCost = globalProducts.reduce((sum, p) => sum + (getPStock(p) * getPCost(p)), 0);
+
   tableWrap.innerHTML = `
-    <div style="background:#fff; padding:20px; border-radius:8px; margin-top:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+    <!-- แสดงสรุปราคาทุนรวมของสินค้าในสต็อกทั้งหมด -->
+    <div style="background:#eef6ff; border-left:5px solid #007bff; padding:15px 20px; border-radius:8px; margin-top:15px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <span style="color:#555; font-size:14px; font-weight:bold;">💰 รวมราคาทุนสินค้าทั้งหมดในสต็อก (Total Capital Value):</span>
+      </div>
+      <div>
+        <span style="color:#007bff; font-size:24px; font-weight:bold;">${totalStockCost.toLocaleString()} ฿</span>
+      </div>
+    </div>
+
+    <div style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
       <table style="width:100%; border-collapse:collapse;">
         <thead>
           <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
@@ -205,6 +221,7 @@ async function loadProducts() {
             <th>คงเหลือ (ชิ้น)</th>
             <th>ราคาทุน (฿)</th>
             <th>ราคาขาย (฿)</th>
+            <th>ราคาทุนรวม (฿)</th>
             <th style="text-align:center;">จัดการ</th>
           </tr>
         </thead>
@@ -212,16 +229,20 @@ async function loadProducts() {
           ${globalProducts.map(p => {
             const pId = String(p.id || p._id);
             const stock = getPStock(p);
+            const cost = getPCost(p);
+            const price = getPPrice(p);
+            const totalCost = stock * cost;
             const safeName = getPName(p).replace(/'/g, "\\'").replace(/"/g, '&quot;');
             return `
               <tr style="border-bottom:1px solid #f9f9f9;">
                 <td style="padding:10px;">${p.category || '-'}</td>
                 <td><strong>${getPName(p)}</strong></td>
                 <td><span style="color:${stock > 10 ? '#28a745' : '#dc3545'}; font-weight:bold;">${stock}</span></td>
-                <td>${getPCost(p).toLocaleString()}</td>
-                <td><strong>${getPPrice(p).toLocaleString()}</strong></td>
+                <td>${cost.toLocaleString()}</td>
+                <td><strong>${price.toLocaleString()}</strong></td>
+                <td style="color:#666;">${totalCost.toLocaleString()}</td>
                 <td style="text-align:center;">
-                  <button onclick="editStock('${pId}', ${stock})" title="แก้ไขจำนวนสต็อก" style="background:#ffc107; border:none; color:#333; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; margin-right:5px;">✏️ แก้ไขสต็อก</button>
+                  <button onclick="editProductDetails('${pId}', ${stock}, ${cost}, ${price})" title="แก้ไขสินค้า" style="background:#ffc107; border:none; color:#333; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; margin-right:5px;">✏️ แก้ไข</button>
                   <button onclick="removeProductItem('${pId}', '${safeName}')" title="ลบสินค้า" style="background:#dc3545; border:none; color:#fff; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold;">🗑️ ลบ</button>
                 </td>
               </tr>
@@ -233,50 +254,55 @@ async function loadProducts() {
   `;
 }
 
-// ฟังก์ชันแก้ไขจำนวนสต็อก
-async function editStock(id, currentStock) {
-  const newStockStr = prompt(`กรุณาระบุจำนวนสินค้าคงเหลือใหม่:`, currentStock);
+// ฟังก์ชันแก้ไขทั้ง จำนวนสต็อก, ราคาทุน, และ ราคาขาย
+async function editProductDetails(id, currentStock, currentCost, currentPrice) {
+  const newStockStr = prompt(`1. ระบุจำนวนสต็อกคงเหลือใหม่:`, currentStock);
   if (newStockStr === null) return;
 
+  const newCostStr = prompt(`2. ระบุราคาทุน (บาท) ใหม่:`, currentCost);
+  if (newCostStr === null) return;
+
+  const newPriceStr = prompt(`3. ระบุราคาขาย (บาท) ใหม่:`, currentPrice);
+  if (newPriceStr === null) return;
+
   const newStock = Number(newStockStr);
-  if (isNaN(newStock) || newStock < 0) {
-    alert('กรุณากรอกตัวเลขจำนวนสินค้าให้ถูกต้อง');
+  const newCost = Number(newCostStr);
+  const newPrice = Number(newPriceStr);
+
+  if (isNaN(newStock) || newStock < 0 || isNaN(newCost) || newCost < 0 || isNaN(newPrice) || newPrice < 0) {
+    alert('กรุณากรอกข้อมูลตัวเลขให้ถูกต้อง');
     return;
   }
 
-  // อัปเดตผ่าน API หรือ Local Mock
   await api(`/products/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ stock: newStock })
+    body: JSON.stringify({ stock: newStock, cost: newCost, price: newPrice })
   });
 
-  // อัปเดตตัวแปรในหน่วยความจำทันทีเพื่อความรวดเร็ว
   const itemIndex = mockProducts.findIndex(p => String(p.id) === String(id));
-  if (itemIndex !== -1) mockProducts[itemIndex].stock = newStock;
+  if (itemIndex !== -1) {
+    mockProducts[itemIndex].stock = newStock;
+    mockProducts[itemIndex].cost = newCost;
+    mockProducts[itemIndex].price = newPrice;
+  }
 
-  alert('อัปเดตจำนวนสต็อกเรียบร้อยแล้ว!');
+  alert('อัปเดตข้อมูลสินค้าเรียบร้อยแล้ว!');
   loadProducts();
 }
 
-// ฟังก์ชันลบสินค้า (แก้ไขชื่อฟังก์ชันป้องกันการชนกับระบบอื่น)
 async function removeProductItem(id, name) {
   if (confirm(`คุณต้องการลบสินค้า "${name}" ออกจากระบบใช่หรือไม่?`)) {
-    await api(`/products/${id}`, {
-      method: 'DELETE'
-    });
-
-    // ลบออกจาก Mock Array ในหน้าเว็บทันที
+    await api(`/products/${id}`, { method: 'DELETE' });
     mockProducts = mockProducts.filter(p => String(p.id) !== String(id));
     globalProducts = globalProducts.filter(p => String(p.id || p._id) !== String(id));
-
     alert('ลบสินค้าเรียบร้อยแล้ว!');
     loadProducts();
   }
 }
 
 // ----------------------------------------------------
-// 3. หน้าสินค้าค้างสต็อก (Deadstock)
+// 3. หน้าสินค้าค้างสต็อก (เพิ่มฟังก์ชันแยกดูต้นทุนทั้งหมด)
 // ----------------------------------------------------
 async function loadDeadstock() {
   const target = document.getElementById('view-deadstock');
@@ -288,59 +314,85 @@ async function loadDeadstock() {
   }
 
   const highStockItems = globalProducts.filter(p => getPStock(p) >= 50);
-  const totalDeadstockCapital = highStockItems.reduce((sum, p) => sum + (getPStock(p) * getPCost(p)), 0);
+  const deadstockCapital = highStockItems.reduce((sum, p) => sum + (getPStock(p) * getPCost(p)), 0);
+  const totalAllCapital = globalProducts.reduce((sum, p) => sum + (getPStock(p) * getPCost(p)), 0);
+
+  const displayList = deadstockViewMode === 'deadstock' ? highStockItems : globalProducts;
 
   target.innerHTML = `
-    <h2>⚠️ สินค้าค้างสต็อก & วิเคราะห์ทุนจม</h2>
-    <p style="color:#666; margin-bottom:20px;">สรุปรายการสินค้าคงเหลือสูงและระดับความวิกฤตทางการเงิน</p>
+    <h2>⚠️ วิเคราะห์ต้นทุนสินค้า & สินค้าค้างสต็อก</h2>
+    <p style="color:#666; margin-bottom:20px;">ตรวจสอบต้นทุนจมและมูลค่าเงินทุนสินค้าคงเหลือทั้งหมด</p>
 
-    <div style="border-left:5px solid #dc3545; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:25px; display:flex; justify-content:space-between; align-items:center;">
-      <div>
-        <span style="color:#666; font-size:14px;">รวมมูลค่าเงินจมทุนสินค้าค้างสต็อก (≥ 50 ชิ้น)</span>
-        <h2 style="margin:5px 0 0 0; color:#dc3545; font-size:28px;">${totalDeadstockCapital.toLocaleString()} บาท</h2>
+    <!-- ปุ่มสลับฟังก์ชันการดูต้นทุน -->
+    <div style="display:flex; gap:10px; margin-bottom:20px;">
+      <button onclick="switchDeadstockMode('deadstock')" style="padding:10px 20px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; ${deadstockViewMode === 'deadstock' ? 'background:#dc3545; color:#fff;' : 'background:#e0e0e0; color:#333;'}">
+        🔥 ดูเฉพาะสินค้าค้างสต็อก (≥ 50 ชิ้น)
+      </button>
+      <button onclick="switchDeadstockMode('all_cost')" style="padding:10px 20px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; ${deadstockViewMode === 'all_cost' ? 'background:#007bff; color:#fff;' : 'background:#e0e0e0; color:#333;'}">
+        💼 ดูต้นทุนสินค้าทั้งหมดในระบบ
+      </button>
+    </div>
+
+    <!-- การ์ดสรุปมูลค่าต้นทุน -->
+    <div style="display:flex; gap:20px; margin-bottom:25px;">
+      <div style="flex:1; border-left:5px solid #dc3545; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+        <span style="color:#666; font-size:14px;">เงินจมสินค้าค้างสต็อก (≥ 50 ชิ้น)</span>
+        <h2 style="margin:5px 0 0 0; color:#dc3545; font-size:24px;">${deadstockCapital.toLocaleString()} บาท</h2>
+        <small style="color:#888;">จำนวน ${highStockItems.length} รายการ</small>
       </div>
-      <div>
-        <span style="background:#f8d7da; color:#721c24; padding:8px 16px; border-radius:20px; font-weight:bold; font-size:14px;">
-          ค้างสต็อกรวม ${highStockItems.length} รายการ
-        </span>
+      <div style="flex:1; border-left:5px solid #007bff; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+        <span style="color:#666; font-size:14px;">รวมเงินต้นทุนสินค้าทั้งหมดในระบบ</span>
+        <h2 style="margin:5px 0 0 0; color:#007bff; font-size:24px;">${totalAllCapital.toLocaleString()} บาท</h2>
+        <small style="color:#888;">จำนวน ${globalProducts.length} รายการ</small>
       </div>
     </div>
 
     <div style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-      <h3 style="margin-top:0; color:#333;">📦 รายการสินค้าและระดับความวิกฤต</h3>
-      ${highStockItems.length > 0 ? `
+      <h3 style="margin-top:0; color:#333;">
+        ${deadstockViewMode === 'deadstock' ? '📦 รายการสินค้าค้างสต็อกเกินกำหนด' : '📋 รายการและมูลค่าต้นทุนสินค้าทั้งหมด'}
+      </h3>
+      ${displayList.length > 0 ? `
         <table style="width:100%; border-collapse:collapse; margin-top:15px;">
           <thead>
             <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
               <th style="padding:10px;">ชื่อสินค้า</th>
               <th>หมวดหมู่</th>
-              <th>จำนวนค้าง (ชิ้น)</th>
-              <th>ทุนจม (บาท)</th>
-              <th>ระดับความวิกฤต</th>
+              <th>จำนวนคงเหลือ (ชิ้น)</th>
+              <th>ทุน/หน่วย (บาท)</th>
+              <th>รวมต้นทุน (บาท)</th>
+              <th>สถานะสต็อก</th>
             </tr>
           </thead>
           <tbody>
-            ${highStockItems.map(p => {
+            ${displayList.map(p => {
               const stock = getPStock(p);
-              const capital = stock * getPCost(p);
-              let badge = '<span style="background:#fff3cd; color:#856404; padding:4px 10px; border-radius:12px; font-size:13px; font-weight:bold;">🟡 วิกฤตปานกลาง</span>';
-              if (stock >= 100) badge = '<span style="background:#f8d7da; color:#721c24; padding:4px 10px; border-radius:12px; font-size:13px; font-weight:bold;">🔴 วิกฤตสูง</span>';
+              const cost = getPCost(p);
+              const totalCost = stock * cost;
+              let badge = '<span style="background:#d4edda; color:#155724; padding:4px 10px; border-radius:12px; font-size:12px; font-weight:bold;">🟢 สต็อกปกติ</span>';
+              if (stock <= 10) badge = '<span style="background:#f8d7da; color:#721c24; padding:4px 10px; border-radius:12px; font-size:12px; font-weight:bold;">🔴 สต็อกเหลือน้อย</span>';
+              else if (stock >= 50) badge = '<span style="background:#fff3cd; color:#856404; padding:4px 10px; border-radius:12px; font-size:12px; font-weight:bold;">🟡 ค้างสต็อก</span>';
 
               return `
                 <tr style="border-bottom:1px solid #f9f9f9;">
                   <td style="padding:10px;"><strong>${getPName(p)}</strong></td>
                   <td>${p.category || '-'}</td>
-                  <td><strong style="color:#d9822b;">${stock}</strong></td>
-                  <td><strong style="color:#dc3545;">${capital.toLocaleString()} ฿</strong></td>
+                  <td><strong>${stock}</strong></td>
+                  <td>${cost.toLocaleString()} ฿</td>
+                  <td><strong style="color:#dc3545;">${totalCost.toLocaleString()} ฿</strong></td>
                   <td>${badge}</td>
                 </tr>
               `;
             }).join('')}
           </tbody>
         </table>
-      ` : '<p style="color:#888;">ไม่พบรายการสินค้าค้างสต็อกเกิน 50 ชิ้น</p>'}
+      ` : '<p style="color:#888;">ไม่พบรายการสินค้าในหมวดหมู่นี้</p>'}
     </div>
   `;
+}
+
+function switchDeadstockMode(mode) {
+  deadstockViewMode = mode;
+  loadDeadstock();
 }
 
 // ----------------------------------------------------
