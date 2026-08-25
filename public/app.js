@@ -265,7 +265,7 @@ async function loadSalesPage() {
   }
 }
 
-// โหลดหน้า แดชบอร์ด
+// โหลดหน้า แดชบอร์ด (รวมต้นทุนจม สต็อกค้างวิกฤต และคำแนะนำ AI)
 async function loadDashboard() {
   if (globalProducts.length === 0) {
     const products = await api('/products');
@@ -277,26 +277,89 @@ async function loadDashboard() {
   const target = document.getElementById('view-dashboard');
   if (!target) return;
 
-  const threshold = 10;
-  const lowStockItems = globalProducts.filter(p => p.current_stock <= threshold);
-  const totalStock = globalProducts.reduce((acc, p) => acc + p.current_stock, 0);
+  const thresholdLow = 10;
+  const thresholdHigh = 50;
+
+  const lowStockItems = globalProducts.filter(p => p.current_stock <= thresholdLow);
+  const deadstockItems = globalProducts.filter(p => p.current_stock >= thresholdHigh);
+  const totalStock = globalProducts.reduce((acc, p) => acc + (p.current_stock || 0), 0);
+  const totalCapitalSunk = globalProducts.reduce((acc, p) => acc + ((p.current_stock || 0) * (p.cost_price || 0)), 0);
 
   target.innerHTML = `
-    <h2>ภาพรวมร้านค้า</h2>
-    <p style="color:#666; margin-bottom:20px;">ข้อมูลจากฐานข้อมูลจริงแบบเรียลไทม์</p>
+    <h2>📊 ภาพรวมร้านค้า & AI Analytics</h2>
+    <p style="color:#666; margin-bottom:20px;">สรุปสถานะสินค้า มูลค่าเงินจม และคำแนะนำวิเคราะห์จากระบบ AI แบบเรียลไทม์</p>
 
-    <div style="display:flex; gap:15px; margin-bottom:25px;">
-      <div style="flex:1; background:#fff; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #007bff;">
+    <div style="display:flex; gap:15px; margin-bottom:25px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:200px; background:#fff; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #007bff;">
         <span style="color:#666; font-size:14px;">รายการสินค้าทั้งหมด</span>
         <h2 style="margin:5px 0 0 0; color:#007bff;">${globalProducts.length} รายการ</h2>
       </div>
-      <div style="flex:1; background:#fff; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #28a745;">
+
+      <div style="flex:1; min-width:200px; background:#fff; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #28a745;">
         <span style="color:#666; font-size:14px;">สต็อกสินค้ารวม</span>
-        <h2 style="margin:5px 0 0 0; color:#28a745;">${totalStock} ชิ้น</h2>
+        <h2 style="margin:5px 0 0 0; color:#28a745;">${totalStock.toLocaleString()} ชิ้น</h2>
       </div>
-      <div style="flex:1; background:#fff; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #dc3545;">
-        <span style="color:#666; font-size:14px;">สินค้าต้องสั่งเพิ่ม (AI)</span>
-        <h2 style="margin:5px 0 0 0; color:#dc3545;">${lowStockItems.length} รายการ</h2>
+
+      <div style="flex:1; min-width:200px; background:#fff; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #6f42c1;">
+        <span style="color:#666; font-size:14px;">💸 มูลค่าเงินจมทุนรวม</span>
+        <h2 style="margin:5px 0 0 0; color:#6f42c1;">${totalCapitalSunk.toLocaleString()} ฿</h2>
+      </div>
+
+      <div style="flex:1; min-width:200px; background:#fff; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #dc3545;">
+        <span style="color:#666; font-size:14px;">สินค้าสต็อกค้างวิกฤต (>=50 ชิ้น)</span>
+        <h2 style="margin:5px 0 0 0; color:#dc3545;">${deadstockItems.length} รายการ</h2>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:20px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:320px; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+        <h3 style="margin-top:0; color:#d9822b;">🤖 คำแนะนำจากระบบ AI (Action Plan)</h3>
+        
+        ${lowStockItems.length > 0 ? `
+          <div style="background:#fff3cd; border-left:4px solid #ffc107; padding:12px; margin-bottom:12px; border-radius:4px;">
+            <strong style="color:#856404;">⚠️ แจ้งเตือนสินค้าหมดสต็อก/ใกล้หมด:</strong>
+            <ul style="margin:5px 0 0 0; padding-left:20px; color:#856404;">
+              ${lowStockItems.map(p => `<li><strong>${p.product_name}</strong> (เหลือ ${p.current_stock} ชิ้น) ➔ <em>แนะนำให้สั่งเติมด่วน +50 ชิ้น</em></li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+
+        ${deadstockItems.length > 0 ? `
+          <div style="background:#f8d7da; border-left:4px solid #dc3545; padding:12px; margin-bottom:12px; border-radius:4px;">
+            <strong style="color:#721c24;">🔥 AI แนะนำจัดโปรโมชันระบายสินค้า:</strong>
+            <ul style="margin:5px 0 0 0; padding-left:20px; color:#721c24;">
+              ${deadstockItems.map(p => `<li><strong>${p.product_name}</strong> (ค้าง ${p.current_stock} ชิ้น / จมทุน ${(p.current_stock * p.cost_price).toLocaleString()} ฿) ➔ <em>แนะนำจัดส่วนลด 15-20% เพื่อดึงทุนคืน</em></li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+
+        ${lowStockItems.length === 0 && deadstockItems.length === 0 ? `
+          <p style="color:#28a745;">✨ ระบบ AI ตรวจสอบแล้ว: การหมุนเวียนสต็อกสมบูรณ์ ไม่พบความเสี่ยงในขณะนี้</p>
+        ` : ''}
+      </div>
+
+      <div style="flex:1; min-width:320px; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+        <h3 style="margin-top:0; color:#dc3545;">⚠️ ตารางสินค้าค้างสต็อกที่ต้องจับตา</h3>
+        ${deadstockItems.length > 0 ? `
+          <table style="width:100%; border-collapse:collapse; margin-top:10px;">
+            <thead>
+              <tr style="border-bottom:2px solid #eee; text-align:left; color:#555; font-size:14px;">
+                <th style="padding:8px;">สินค้า</th>
+                <th>จำนวนค้าง</th>
+                <th>ทุนจม</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${deadstockItems.map(p => `
+                <tr style="border-bottom:1px solid #f9f9f9; font-size:14px;">
+                  <td style="padding:8px;"><strong>${p.product_name}</strong></td>
+                  <td><span style="color:#dc3545; font-weight:bold;">${p.current_stock} ชิ้น</span></td>
+                  <td>${(p.current_stock * p.cost_price).toLocaleString()} ฿</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : '<p style="color:#888; margin-top:10px;">ไม่มีรายการสินค้าที่ค้างเกินกำหนด</p>'}
       </div>
     </div>
   `;
