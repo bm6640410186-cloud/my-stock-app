@@ -6,11 +6,12 @@
   <title>เข้าสู่ระบบ - StockUniform AI</title>
   <link rel="stylesheet" href="styles.css">
   <style>
-    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #1F2A44; }
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #1F2A44; margin: 0; }
     .login-box { background: #fff; padding: 30px; border-radius: 8px; width: 360px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     .login-box h2 { text-align: center; margin-bottom: 20px; color: #1F2A44; }
+    .login-box label { font-size: 14px; color: #5B6272; }
     .login-box input { width: 100%; padding: 10px; margin: 8px 0 16px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-    .login-box button { width: 100%; padding: 10px; background: #D8933E; border: none; color: #fff; font-weight: bold; border-radius: 4px; cursor: pointer; }
+    .login-box button { width: 100%; padding: 10px; background: #D8933E; border: none; color: #fff; font-weight: bold; border-radius: 4px; cursor: pointer; font-size: 16px; }
     .login-box button:hover { background: #c28132; }
   </style>
 </head>
@@ -19,29 +20,43 @@
     <h2>StockUniform AI</h2>
     <form id="loginForm">
       <label>ชื่อผู้ใช้งาน</label>
-      <input type="text" id="username" required placeholder="admin">
+      <input type="text" id="username" required placeholder="admin" value="admin">
       <label>รหัสผ่าน</label>
-      <input type="password" id="password" required placeholder="1234">
-      <button type="submit">เข้าสู่ระบบ</button>
+      <input type="password" id="password" required placeholder="1234" value="1234">
+      <button type="submit" id="submitBtn">เข้าสู่ระบบ</button>
     </form>
   </div>
 
   <script>
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: e.target.username.value,
-          password: e.target.password.value
-        })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        window.location.href = '/';
-      } else {
-        alert(data.message || 'เข้าสู่ระบบไม่สำเร็จ');
+      const btn = document.getElementById('submitBtn');
+      btn.innerText = 'กำลังเข้าสู่ระบบ...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value
+          })
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+          window.location.href = '/';
+        } else {
+          alert(data.message || 'เข้าสู่ระบบไม่สำเร็จ');
+          btn.innerText = 'เข้าสู่ระบบ';
+          btn.disabled = false;
+        }
+      } catch (err) {
+        alert('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
+        btn.innerText = 'เข้าสู่ระบบ';
+        btn.disabled = false;
       }
     });
   </script>
