@@ -3,155 +3,181 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StockUniform AI - ระบบจัดการสต็อกชุดนักศึกษา</title>
-  <style>
-    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    body { margin: 0; display: flex; height: 100vh; background: #f4f6f9; }
-    .sidebar { width: 240px; background: #1a233a; color: #fff; padding: 20px 0; display: flex; flex-direction: column; }
-    .sidebar h2 { padding: 0 20px; font-size: 18px; margin-bottom: 20px; }
-    .nav-item { padding: 12px 20px; color: #a6b0cf; text-decoration: none; cursor: pointer; display: block; }
-    .nav-item:hover, .nav-item.active { background: #263353; color: #fff; border-left: 4px solid #d9822b; }
-    .main-content { flex: 1; padding: 30px; overflow-y: auto; }
-    .btn-primary { background: #d9822b; color: #fff; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-  </style>
+  <title>StockUniform AI - ระบบจัดการสต็อก</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand">
+        <h2>StockUniform AI</h2>
+      </div>
+      <nav class="nav-menu">
+        <div class="nav-item active" data-view="dashboard">
+          <span class="icon">📊</span> แดชบอร์ด
+        </div>
+        <div class="nav-item" data-view="products">
+          <span class="icon">📦</span> สินค้าและสต็อก
+        </div>
+        <div class="nav-item" data-view="pos">
+          <span class="icon">🛒</span> ขายสินค้า
+        </div>
+        <div class="nav-item" data-view="deadstock">
+          <span class="icon">⚠️</span> สินค้าค้างสต็อก
+        </div>
+        <div class="nav-item" data-view="receive">
+          <span class="icon">📥</span> รับสินค้าเข้า
+        </div>
+        <div class="nav-item" data-view="ai-analytics">
+          <span class="icon">🤖</span> วิเคราะห์สต็อก (AI)
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="btn-logout" onclick="alert('ออกจากระบบเรียบร้อย')">ออกจากระบบ</button>
+      </div>
+    </aside>
 
-  <!-- Sidebar ด้านซ้าย (เมนูครบ 6 หน้า) -->
-  <div class="sidebar">
-    <h2>StockUniform AI</h2>
-    <div class="nav-item active" data-view="dashboard">📊 แดชบอร์ด</div>
-    <div class="nav-item" data-view="products">📦 สินค้าและสต็อก</div>
-    <div class="nav-item" data-view="sales">🛒 ขายสินค้า</div>
-    <div class="nav-item" data-view="deadstock">⚠️ สินค้าค้างสต็อก</div>
-    <div class="nav-item" data-view="receive">📥 รับสินค้าเข้า</div>
-    <div class="nav-item" data-view="forecast">🤖 วิเคราะห์สต็อก (AI)</div>
-    <div style="margin-top: auto; padding: 20px;">
-      <button id="logoutBtn" style="width: 100%; background: #dc3545; color: #fff; border: none; padding: 8px; border-radius: 4px; cursor: pointer;">ออกจากระบบ</button>
-    </div>
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- 1. View Dashboard -->
+      <section id="view-dashboard" class="view active-view"></section>
+
+      <!-- 2. View Products & Stock -->
+      <section id="view-products" class="view" style="display:none;">
+        <div class="header-action" style="display:flex; justify-content:space-between; align-items:center;">
+          <h2>จัดการสินค้าและสต็อก</h2>
+          <button class="btn-primary" onclick="openProductForm()">+ เพิ่มสินค้าใหม่</button>
+        </div>
+        <div id="productsTableWrap"></div>
+      </section>
+
+      <!-- 3. View POS (Selling) -->
+      <section id="view-pos" class="view" style="display:none;">
+        <h2>🛒 ขายสินค้า (POS)</h2>
+        <p style="color:#666;">ระบบบันทึกการขายสินค้าหน้าร้าน</p>
+        <div style="background:#fff; padding:20px; border-radius:8px; margin-top:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+          <p style="color:#888; text-align:center;">ฟังก์ชันระบบขายหน้าร้าน (พร้อมใช้งานในการอัปเดตถัดไป)</p>
+        </div>
+      </section>
+
+      <!-- 4. View Deadstock & Low Stock Analytics -->
+      <section id="view-deadstock" class="view" style="display:none;"></section>
+
+      <!-- 5. View Receive Products -->
+      <section id="view-receive" class="view" style="display:none;"></section>
+
+      <!-- 6. View AI Analytics -->
+      <section id="view-ai-analytics" class="view" style="display:none;"></section>
+    </main>
   </div>
 
-  <!-- เนื้อหาหลัก -->
-  <div class="main-content">
-    <div id="view-dashboard" class="view"></div>
-
-    <div id="view-products" class="view" style="display:none;">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <h2>จัดการสินค้าและสต็อก</h2>
-        <button class="btn-primary" onclick="openProductForm()">+ เพิ่มสินค้าใหม่</button>
-      </div>
-      <div id="productsTableWrap"></div>
-    </div>
-
-    <div id="view-sales" class="view" style="display:none;"></div>
-    <div id="view-deadstock" class="view" style="display:none;"></div>
-    <div id="view-receive" class="view" style="display:none;"></div>
-    <div id="view-forecast" class="view" style="display:none;"></div>
-  </div>
-
-  <!-- Modal เพิ่มสินค้าใหม่ -->
-  <div id="productModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
-    <div style="background:#fff; width:90%; max-width:500px; padding:25px; border-radius:12px; max-height:90vh; overflow-y:auto;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
-        <h3 style="margin:0;">✨ เพิ่มสินค้าใหม่</h3>
-        <span onclick="closeProductForm()" style="cursor:pointer; font-size:20px; font-weight:bold;">&times;</span>
-      </div>
-
+  <!-- Product Modal Form -->
+  <div id="productModal" class="modal" style="display:none;">
+    <div class="modal-content" style="background:#fff; max-width:500px; margin:50px auto; padding:25px; border-radius:12px; box-shadow:0 5px 15px rgba(0,0,0,0.2); position:relative;">
+      <span class="close-btn" onclick="closeProductForm()" style="position:absolute; right:20px; top:15px; font-size:24px; cursor:pointer;">&times;</span>
+      <h3 style="margin-top:0;">✨ เพิ่มสินค้าใหม่</h3>
       <form id="productForm">
-        <div style="margin-bottom:12px;">
-          <label style="display:block; font-weight:bold; margin-bottom:5px;">หมวดหมู่สินค้า:</label>
-          <select id="pCategory" onchange="toggleCategoryFields()" style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px;" required>
+        <div style="margin-bottom:15px;">
+          <label style="display:block; margin-bottom:5px; font-weight:bold;">หมวดหมู่สินค้า:</label>
+          <select id="pCategory" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
             <option value="กระโปรงนักศึกษา">กระโปรงนักศึกษา</option>
             <option value="เสื้อนักศึกษา">เสื้อนักศึกษา</option>
-            <option value="อื่นๆ">อื่นๆ</option>
+            <option value="อุปกรณ์ / อื่นๆ">อุปกรณ์ / อื่นๆ</option>
           </select>
         </div>
 
-        <!-- ตัวเลือก: กระโปรง -->
-        <div id="skirtFields" style="background:#f8f9fa; padding:12px; border-radius:8px; margin-bottom:12px; border:1px solid #e9ecef;">
-          <div style="margin-bottom:10px;">
-            <label style="display:block; font-weight:bold; margin-bottom:3px; font-size:13px;">ทรง / รูปแบบกระโปรง:</label>
-            <select id="pSkirtStyle" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
+        <!-- ฟิลด์สำหรับกระโปรง -->
+        <div id="skirtFields">
+          <div style="margin-bottom:15px;">
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">ทรง / รูปแบบกระโปรง:</label>
+            <select id="pSkirtStyle" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
               <option value="พลีทกลีบเล็ก">พลีทกลีบเล็ก</option>
               <option value="พลีทกลีบใหญ่">พลีทกลีบใหญ่</option>
-              <option value="ทรงเอ">ทรงเอ (ไม่ผ่า)</option>
-              <option value="ทรงเอ-ผ่าหน้า">ทรงเอ (ผ่าหน้า)</option>
-              <option value="ทรงเอ-ผ่าหลัง">ทรงเอ (ผ่าหลัง)</option>
-              <option value="ทรงแคบ">ทรงแคบ</option>
+              <option value="ทรงเอ">ทรงเอ</option>
+              <option value="สอบผ่าหลัง">สอบผ่าหลัง</option>
             </select>
           </div>
-          <div style="display:flex; gap:10px;">
+          <div style="display:flex; gap:10px; margin-bottom:15px;">
             <div style="flex:1;">
-              <label style="display:block; font-weight:bold; margin-bottom:3px; font-size:13px;">ขนาดเอว (นิ้ว):</label>
-              <input type="number" id="pWaist" placeholder="เช่น 25" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
+              <label style="display:block; margin-bottom:5px; font-weight:bold;">ขนาดเอว (นิ้ว):</label>
+              <input type="text" id="pWaist" placeholder="เช่น 25" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
             </div>
             <div style="flex:1;">
-              <label style="display:block; font-weight:bold; margin-bottom:3px; font-size:13px;">ความยาว (นิ้ว):</label>
-              <input type="number" id="pLength" placeholder="เช่น 18" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
+              <label style="display:block; margin-bottom:5px; font-weight:bold;">ความยาว (นิ้ว):</label>
+              <input type="text" id="pLength" placeholder="เช่น 18" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
             </div>
           </div>
         </div>
 
-        <!-- ตัวเลือก: เสื้อ -->
-        <div id="shirtFields" style="background:#f8f9fa; padding:12px; border-radius:8px; margin-bottom:12px; border:1px solid #e9ecef; display:none;">
-          <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <!-- ฟิลด์สำหรับเสื้อ -->
+        <div id="shirtFields" style="display:none;">
+          <div style="display:flex; gap:10px; margin-bottom:15px;">
             <div style="flex:1;">
-              <label style="display:block; font-weight:bold; margin-bottom:3px; font-size:13px;">รูปแบบ/ทรงเสื้อ:</label>
-              <select id="pShirtGender" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
-                <option value="เสื้อผู้หญิง">เสื้อผู้หญิง</option>
-                <option value="เสื้อผู้ชาย">เสื้อผู้ชาย</option>
+              <label style="display:block; margin-bottom:5px; font-weight:bold;">ประเภทเสื้อ:</label>
+              <select id="pShirtGender" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+                <option value="เสื้อนักศึกษาชาย">เสื้อนักศึกษาชาย</option>
+                <option value="เสื้อนักศึกษาหญิง">เสื้อนักศึกษาหญิง</option>
               </select>
             </div>
             <div style="flex:1;">
-              <label style="display:block; font-weight:bold; margin-bottom:3px; font-size:13px;">ความยาวแขน:</label>
-              <select id="pShirtSleeve" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
+              <label style="display:block; margin-bottom:5px; font-weight:bold;">แขนเสื้อ:</label>
+              <select id="pShirtSleeve" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
                 <option value="แขนสั้น">แขนสั้น</option>
                 <option value="แขนยาว">แขนยาว</option>
               </select>
             </div>
           </div>
-          <div style="display:flex; gap:10px;">
+          <div style="display:flex; gap:10px; margin-bottom:15px;">
             <div style="flex:1;">
-              <label style="display:block; font-weight:bold; margin-bottom:3px; font-size:13px;">โทนสี:</label>
-              <select id="pShirtColor" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
-                <option value="ขาวนวล">ขาวนวล</option>
-                <option value="ขาวโอโม่">ขาวโอโม่</option>
+              <label style="display:block; margin-bottom:5px; font-weight:bold;">รายละเอียดหลัง:</label>
+              <select id="pShirtBack" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+                <option value="ไม่มีสาบหลัง">ไม่มีสาบหลัง</option>
+                <option value="มีสาบหลัง">มีสาบหลัง</option>
               </select>
             </div>
             <div style="flex:1;">
-              <label style="display:block; font-weight:bold; margin-bottom:3px; font-size:13px;">ไซส์ (รอบอก/เบอร์):</label>
-              <input type="text" id="pShirtSize" placeholder="เช่น S, M, L หรือ 36" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px;">
+              <label style="display:block; margin-bottom:5px; font-weight:bold;">สีผ้า:</label>
+              <select id="pShirtColor" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+                <option value="ขาวสว่าง">ขาวสว่าง</option>
+                <option value="ขาวนวล">ขาวนวล</option>
+              </select>
             </div>
           </div>
-        </div>
-
-        <!-- ตัวเลือก: สินค้าอื่นๆ -->
-        <div id="generalNameField" style="margin-bottom:12px; display:none;">
-          <label style="display:block; font-weight:bold; margin-bottom:5px;">ชื่อสินค้า:</label>
-          <input type="text" id="pName" placeholder="เช่น กางเกงสแล็ค" style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px;">
-        </div>
-        <div id="generalSizeField" style="margin-bottom:12px; display:none;">
-          <label style="display:block; font-weight:bold; margin-bottom:5px;">ไซส์ (ถ้ามี):</label>
-          <input type="text" id="pSize" placeholder="เช่น XL" style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px;">
-        </div>
-
-        <div style="display:flex; gap:10px; margin-bottom:12px;">
-          <div style="flex:1;">
-            <label style="display:block; font-weight:bold; margin-bottom:5px;">จำนวนสต็อก:</label>
-            <input type="number" id="pStock" value="0" min="0" required style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px;">
-          </div>
-          <div style="flex:1;">
-            <label style="display:block; font-weight:bold; margin-bottom:5px;">ราคาทุน (฿):</label>
-            <input type="number" id="pCost" value="0" min="0" required style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px;">
+          <div style="margin-bottom:15px;">
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">ไซส์เสื้อ (รอบอก):</label>
+            <input type="text" id="pShirtSize" placeholder="เช่น S, M, L, XL หรือ 38, 40" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
           </div>
         </div>
 
+        <!-- ฟิลด์สำหรับสินค้าทั่วไป -->
+        <div id="generalNameField" style="display:none; margin-bottom:15px;">
+          <label style="display:block; margin-bottom:5px; font-weight:bold;">ชื่อสินค้า:</label>
+          <input type="text" id="pName" placeholder="เช่น เข็มกลัด, ไทน์" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+        </div>
+        <div id="generalSizeField" style="display:none; margin-bottom:15px;">
+          <label style="display:block; margin-bottom:5px; font-weight:bold;">ขนาด / รายละเอียด:</label>
+          <input type="text" id="pSize" placeholder="เช่น ฟรีไซส์" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+        </div>
+
+        <!-- ฟิลด์ตัวเลข พิมพ์ทับได้ทันที -->
+        <div style="display:flex; gap:10px; margin-bottom:15px;">
+          <div style="flex:1;">
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">จำนวนสต็อก:</label>
+            <input type="number" id="pStock" value="0" onfocus="this.select()" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+          </div>
+          <div style="flex:1;">
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">ราคาทุน (฿):</label>
+            <input type="number" id="pCost" value="0" onfocus="this.select()" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
+          </div>
+        </div>
         <div style="margin-bottom:20px;">
-          <label style="display:block; font-weight:bold; margin-bottom:5px;">ราคาขาย (฿):</label>
-          <input type="number" id="pPrice" value="0" min="0" required style="width:100%; padding:9px; border:1px solid #ccc; border-radius:6px;">
+          <label style="display:block; margin-bottom:5px; font-weight:bold;">ราคาขาย (฿):</label>
+          <input type="number" id="pPrice" value="0" onfocus="this.select()" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:6px;">
         </div>
 
-        <button type="submit" class="btn-primary" style="width:100%; padding:12px; font-size:16px;">💾 บันทึกสินค้า</button>
+        <button type="submit" class="btn-primary" style="width:100%; padding:12px; background:#d9822b; color:#fff; border:none; border-radius:6px; font-size:16px; font-weight:bold; cursor:pointer;">💾 บันทึกสินค้า</button>
       </form>
     </div>
   </div>
