@@ -1,3 +1,29 @@
+// ฟังก์ชันสลับการแสดงผลช่องกรอกตามหมวดหมู่
+function toggleCategoryFields() {
+  const catEl = document.getElementById('pCategory');
+  if (!catEl) return;
+  const cat = catEl.value;
+
+  const skirtFields = document.getElementById('skirtFields');
+  const shirtFields = document.getElementById('shirtFields');
+  const generalNameField = document.getElementById('generalNameField');
+  const generalSizeField = document.getElementById('generalSizeField');
+
+  if (skirtFields) skirtFields.style.display = 'none';
+  if (shirtFields) shirtFields.style.display = 'none';
+  if (generalNameField) generalNameField.style.display = 'none';
+  if (generalSizeField) generalSizeField.style.display = 'none';
+
+  if (cat === 'กระโปรงนักศึกษา' && skirtFields) {
+    skirtFields.style.display = 'block';
+  } else if (cat === 'เสื้อนักศึกษา' && shirtFields) {
+    shirtFields.style.display = 'block';
+  } else {
+    if (generalNameField) generalNameField.style.display = 'block';
+    if (generalSizeField) generalSizeField.style.display = 'block';
+  }
+}
+
 // ฟังก์ชันสลับหน้าเมนู
 function switchView(viewName) {
   document.querySelectorAll('.view').forEach(el => {
@@ -27,12 +53,18 @@ function switchView(viewName) {
 }
 
 function openProductForm() {
-  document.getElementById('productModal').style.display = 'flex';
+  const modal = document.getElementById('productModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    toggleCategoryFields();
+  }
 }
 
 function closeProductForm() {
-  document.getElementById('productModal').style.display = 'none';
-  document.getElementById('productForm').reset();
+  const modal = document.getElementById('productModal');
+  const form = document.getElementById('productForm');
+  if (modal) modal.style.display = 'none';
+  if (form) form.reset();
 }
 
 async function api(url, options = {}) {
@@ -52,7 +84,6 @@ async function api(url, options = {}) {
   }
 }
 
-// ตัวแปรเก็บรายการสินค้า
 let globalProducts = [];
 
 // ฟังก์ชันลบสินค้า
@@ -81,9 +112,9 @@ function renderProductsTable() {
       <table style="width:100%; border-collapse:collapse; margin-top:15px; background:#fff; border-radius:8px; padding:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
         <thead>
           <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
-            <th style="padding:12px;">ชื่อสินค้า</th>
+            <th style="padding:12px;">ชื่อสินค้า / รายละเอียด</th>
             <th>หมวดหมู่</th>
-            <th>ไซส์</th>
+            <th>ไซส์ / ขนาด</th>
             <th>คงเหลือ</th>
             <th>ราคาทุน</th>
             <th>ราคาขาย</th>
@@ -127,7 +158,7 @@ async function loadProducts() {
 
 let salesHistory = [];
 
-// โหลดหน้า บันทึกการขายสินค้า (แสดงเฉพาะชื่อสินค้า)
+// โหลดหน้า บันทึกการขายสินค้า
 async function loadSalesPage() {
   if (globalProducts.length === 0) {
     const products = await api('/products');
@@ -154,7 +185,7 @@ async function loadSalesPage() {
               <option value="">-- เลือกรายการสินค้า --</option>
               ${globalProducts.map(p => `
                 <option value="${p.id}" ${p.current_stock <= 0 ? 'disabled' : ''}>
-                  ${p.product_name}
+                  ${p.product_name} ${p.size ? `(${p.size})` : ''}
                 </option>
               `).join('')}
             </select>
@@ -249,7 +280,6 @@ async function loadDashboard() {
 
   const threshold = 10;
   const lowStockItems = globalProducts.filter(p => p.current_stock <= threshold);
-  const deadstockItems = globalProducts.filter(p => p.current_stock > 0);
   const totalStock = globalProducts.reduce((acc, p) => acc + p.current_stock, 0);
 
   target.innerHTML = `
@@ -270,144 +300,24 @@ async function loadDashboard() {
         <h2 style="margin:5px 0 0 0; color:#dc3545;">${lowStockItems.length} รายการ</h2>
       </div>
     </div>
-
-    <div style="background:#fff; padding:20px; border-radius:8px; margin-bottom:20px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-      <h3 style="margin-top:0;">🤖 คำแนะนำสั่งซื้อเร่งด่วนจาก AI</h3>
-      ${lowStockItems.length > 0 ? `
-        <table style="width:100%; border-collapse:collapse; margin-top:10px;">
-          <thead>
-            <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
-              <th style="padding:10px;">ชื่อสินค้า</th>
-              <th>คงเหลือ</th>
-              <th>สถานะ</th>
-              <th>แนะนำสั่งซื้อ</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${lowStockItems.map(p => `
-              <tr style="border-bottom:1px solid #f9f9f9;">
-                <td style="padding:10px;"><strong>${p.product_name}</strong> (${p.size || '-'})</td>
-                <td><span style="color:${p.current_stock === 0 ? '#d9534f' : '#f0ad4e'}; font-weight:bold;">${p.current_stock}</span></td>
-                <td><span style="color:#d9534f;">${p.current_stock === 0 ? 'หมดสต็อก' : 'สต็อกต่ำ'}</span></td>
-                <td><strong style="color:#5cb85c;">+${50 - p.current_stock} ชิ้น</strong></td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      ` : '<p style="color:#5cb85c; margin:10px 0 0 0;">✅ สินค้าทุกรายการอยู่ในระดับปลอดภัย</p>'}
-    </div>
   `;
 }
 
-// โหลดระบบคำแนะนำ AI
 async function loadAIForecast() {
   if (globalProducts.length === 0) {
     const products = await api('/products');
-    if (products && Array.isArray(products) && products.length > 0) {
-      globalProducts = products;
-    }
+    if (products && Array.isArray(products) && products.length > 0) globalProducts = products;
   }
-
-  const target = document.getElementById('view-forecast');
-  if (!target) return;
-
-  const threshold = 10;
-  const lowStockItems = globalProducts.filter(p => p.current_stock <= threshold);
-
-  target.innerHTML = `
-    <h2>🤖 คำแนะนำสั่งซื้อ (AI Smart Forecast)</h2>
-    <p style="color:#666; margin-bottom:15px;">ระบบวิเคราะห์สต็อกสินค้าที่เหลือน้อยและเสนอแนะปริมาณที่ควรสั่งซื้อเพิ่ม</p>
-    
-    ${lowStockItems.length > 0 ? `
-      <table style="width:100%; border-collapse:collapse; background:#fff; border-radius:8px; padding:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-        <thead>
-          <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
-            <th style="padding:12px;">ชื่อสินค้า</th>
-            <th>หมวดหมู่ / ไซส์</th>
-            <th>คงเหลือปัจจุบัน</th>
-            <th>สถานะความเสี่ยง</th>
-            <th>จำนวนที่แนะนำสั่งซื้อ</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${lowStockItems.map(p => `
-            <tr style="border-bottom:1px solid #f9f9f9;">
-              <td style="padding:12px;"><strong>${p.product_name}</strong></td>
-              <td>${p.category || '-'} (${p.size || '-'})</td>
-              <td><span style="color:${p.current_stock === 0 ? '#d9534f' : '#f0ad4e'}; font-weight:bold;">${p.current_stock} ชิ้น</span></td>
-              <td>
-                <span style="padding:4px 8px; border-radius:4px; font-size:12px; color:#fff; background:${p.current_stock === 0 ? '#d9534f' : '#f0ad4e'};">
-                  ${p.current_stock === 0 ? 'หมดสต็อก' : 'สต็อกต่ำ'}
-                </span>
-              </td>
-              <td><strong style="color:#5cb85c;">+${50 - p.current_stock} ชิ้น</strong></td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    ` : `
-      <div style="background:#fff; padding:30px; border-radius:8px; text-align:center; color:#5cb85c; margin-top:15px;">
-        <h3>✅ สต็อกสินค้าอยู่ในระดับปลอดภัยทุกรายการ</h3>
-        <p style="color:#666; font-size:14px; margin-top:5px;">ยังไม่มีสินค้าที่จำเป็นต้องสั่งซื้อเพิ่มในขณะนี้</p>
-      </div>
-    `}
-  `;
 }
 
-// โหลดหน้าสินค้าค้างสต็อก
 async function loadDeadstock() {
   if (globalProducts.length === 0) {
     const products = await api('/products');
-    if (products && Array.isArray(products) && products.length > 0) {
-      globalProducts = products;
-    }
+    if (products && Array.isArray(products) && products.length > 0) globalProducts = products;
   }
-
-  const target = document.getElementById('view-deadstock');
-  if (!target) return;
-
-  const deadstockItems = globalProducts.filter(p => p.current_stock > 0);
-
-  target.innerHTML = `
-    <h2>⚠️ สินค้าค้างสต็อก</h2>
-    <p style="color:#666; margin-bottom:15px;">รายการสินค้าที่อยู่ในสต็อกและต้องการการเร่งระบาย</p>
-    ${deadstockItems.length > 0 ? `
-      <table style="width:100%; border-collapse:collapse; background:#fff; border-radius:8px; padding:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-        <thead>
-          <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
-            <th style="padding:12px;">ชื่อสินค้า</th>
-            <th>หมวดหมู่</th>
-            <th>ไซส์</th>
-            <th>จำนวนค้างสต็อก</th>
-            <th>มูลค่ารวม (ทุน)</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${deadstockItems.map(p => `
-            <tr style="border-bottom:1px solid #f9f9f9;">
-              <td style="padding:12px;">${p.product_name}</td>
-              <td>${p.category || '-'}</td>
-              <td>${p.size || '-'}</td>
-              <td><span style="color:#d9534f; font-weight:bold;">${p.current_stock}</span></td>
-              <td>${(p.current_stock * p.cost_price).toLocaleString()} ฿</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    ` : '<p style="color:#888;">ไม่มีรายการสินค้าค้างสต็อก</p>'}
-  `;
 }
 
-function loadReceivePage() {
-  const target = document.getElementById('view-receive');
-  if (!target) return;
-  target.innerHTML = `
-    <h2>📥 รับสินค้าเข้าสต็อก</h2>
-    <div style="background:#fff; padding:20px; border-radius:8px; margin-top:15px; max-width:500px;">
-      <p style="color:#666;">ระบบบันทึกการรับสินค้าเข้าสต็อกเพิ่มจาก Supplier</p>
-    </div>
-  `;
-}
+function loadReceivePage() {}
 
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.nav-item').forEach(item => {
@@ -431,11 +341,36 @@ document.addEventListener('DOMContentLoaded', () => {
   if (productForm) {
     productForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      
+      const category = document.getElementById('pCategory').value;
+      let name = '';
+      let size = '';
+
+      if (category === 'กระโปรงนักศึกษา') {
+        const style = document.getElementById('pSkirtStyle').value;
+        const waist = document.getElementById('pWaist').value;
+        const length = document.getElementById('pLength').value;
+
+        name = `กระโปรง${style}`;
+        size = `เอว ${waist || '-'} / ยาว ${length || '-'}`;
+      } else if (category === 'เสื้อนักศึกษา') {
+        const gender = document.getElementById('pShirtGender').value;
+        const sleeve = document.getElementById('pShirtSleeve').value;
+        const color = document.getElementById('pShirtColor').value;
+        const shirtSize = document.getElementById('pShirtSize').value;
+
+        name = `${gender}${sleeve} (${color})`;
+        size = shirtSize ? `ไซส์ ${shirtSize}` : '-';
+      } else {
+        name = document.getElementById('pName').value;
+        size = document.getElementById('pSize').value;
+      }
+
       const newProduct = {
         id: Date.now().toString(),
-        product_name: document.getElementById('pName').value,
-        category: document.getElementById('pCategory').value,
-        size: document.getElementById('pSize').value,
+        product_name: name,
+        category: category,
+        size: size,
         current_stock: parseInt(document.getElementById('pStock').value) || 0,
         cost_price: parseFloat(document.getElementById('pCost').value) || 0,
         selling_price: parseFloat(document.getElementById('pPrice').value) || 0
