@@ -1,23 +1,29 @@
-// โหลดหน้า สินค้าค้างสต็อก (Deadstock Analytics) - ปรับปรุงแก้ไขให้รองรับทั้ง API และข้อมูลในเครื่อง
+// โหลดหน้า สินค้าค้างสต็อก (แก้ปัญหาหน้าขาว 100%)
 async function loadDeadstock() {
   const target = document.getElementById('view-deadstock');
   if (!target) return;
 
-  // 1. ดึงข้อมูลจาก API เสมอ เพื่อให้ได้ข้อมูลล่าสุดจริงจากฐานข้อมูล
+  // 1. ใส่ Loading รอไว้ก่อน เพื่อไม่ให้หน้าจอว่างเปล่า
+  target.innerHTML = `
+    <h2>⚠️ สินค้าค้างสต็อก (Deadstock Analytics)</h2>
+    <p style="color:#666;">กำลังดึงข้อมูลสินค้าค้างสต็อก...</p>
+  `;
+
+  // 2. ดึงข้อมูลแบบปลอดภัย (ถ้า API พัง จะไม่ทำให้ JS ค้าง)
   try {
     const products = await api('/products');
-    if (products && Array.isArray(products) && products.length > 0) {
+    if (products && Array.isArray(products)) {
       globalProducts = products;
     }
   } catch (err) {
-    console.error('ไม่สามารถดึงข้อมูลสินค้าจาก API ได้ ใช้ข้อมูล local แทน:', err);
+    console.error('API Error:', err);
   }
 
-  // 2. กรองสินค้าค้างสต็อก (แปลงค่า current_stock เป็น Number เพื่อป้องกันปัญหาข้อมูลเป็น Text)
-  const deadstockThreshold = 50; // กำหนดเกณฑ์สินค้าค้างเยอะ (>= 50 ชิ้น)
-  const highStockItems = globalProducts.filter(p => Number(p.current_stock || 0) >= deadstockThreshold);
+  // 3. กรองข้อมูล (แปลงเป็น Number ป้องกันข้อมูล String)
+  const deadstockThreshold = 50;
+  const highStockItems = (globalProducts || []).filter(p => Number(p.current_stock || 0) >= deadstockThreshold);
 
-  // 3. แสดงผลตารางสินค้าค้างสต็อก
+  // 4. แสดงผลตาราง
   target.innerHTML = `
     <h2>⚠️ สินค้าค้างสต็อก (Deadstock Analytics)</h2>
     <p style="color:#666; margin-bottom:20px;">ตรวจสอบรายการสินค้าที่คงค้างในระบบปริมาณมากและจมทุน</p>
@@ -39,15 +45,13 @@ async function loadDeadstock() {
             ${highStockItems.map(p => {
               const stock = Number(p.current_stock || 0);
               const cost = Number(p.cost_price || p.price || 0);
-              const totalCapital = stock * cost;
-
               return `
                 <tr style="border-bottom:1px solid #f9f9f9;">
                   <td style="padding:10px;"><strong>${p.product_name || p.name || '-'}</strong></td>
                   <td>${p.category || '-'}</td>
                   <td>${p.size || p.detail || '-'}</td>
                   <td><strong style="color:#dc3545;">${stock} ชิ้น</strong></td>
-                  <td><strong>${totalCapital.toLocaleString()} ฿</strong></td>
+                  <td><strong>${(stock * cost).toLocaleString()} ฿</strong></td>
                 </tr>
               `;
             }).join('')}
@@ -55,8 +59,7 @@ async function loadDeadstock() {
         </table>
       ` : `
         <div style="text-align:center; padding:30px; color:#888;">
-          <p style="font-size:16px; margin:0;">ไม่พบรายการสินค้าค้างสต็อก (ที่มีสต็อกตั้งแต่ ${deadstockThreshold} ชิ้นขึ้นไป)</p>
-          <small>หากมีสินค้าสต็อกเยอะแต่ไม่แสดงผล กรุณาตรวจสอบว่าจำนวนสต็อกในระบบมีถึง ${deadstockThreshold} ชิ้นหรือไม่</small>
+          <p style="font-size:16px; margin:0;">ไม่พบรายการสินค้าค้างสต็อก (สต็อก >= ${deadstockThreshold} ชิ้น)</p>
         </div>
       `}
     </div>
