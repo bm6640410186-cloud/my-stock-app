@@ -1,18 +1,18 @@
 const express = require('express');
 const router = express.Router();
 
-// ตัวแปรเก็บข้อมูลสินค้าจำลองในหน่วยความจำ
+// ตัวแปรเก็บข้อมูลสินค้าจำลอง
 let products = [
   { id: 1, product_name: 'เสื้อเชิ้ตแขนยาว', category: 'เสื้อนักศึกษา', size: 'M', current_stock: 50, cost_price: 150, selling_price: 250 },
   { id: 2, product_name: 'กระโปรงพลีท', category: 'กระโปรง', size: 'Free Size', current_stock: 30, cost_price: 180, selling_price: 300 }
 ];
 
-//ดึงรายการสินค้าทั้งหมด
+// ดึงรายการสินค้าทั้งหมด
 router.get('/', (req, res) => {
   res.json(products);
 });
 
-//เพิ่มสินค้าใหม่
+// เพิ่มสินค้าใหม่
 router.post('/', (req, res) => {
   const { product_name, category, size, current_stock, cost_price, selling_price } = req.body;
   
@@ -30,4 +30,4 @@ router.post('/', (req, res) => {
   res.status(201).json({ message: 'บันทึกสินค้าสำเร็จ', product: newProduct });
 });
 
-module.exports = router;Stock, adjustStock };
+module.exports = router;
