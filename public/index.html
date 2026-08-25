@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>StockUniform AI - ระบบจัดการสต็อกร้านชุดนักศึกษา</title>
   <link rel="stylesheet" href="styles.css">
+  <style>
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
+    .modal-content { background: #fff; padding: 25px; border-radius: 8px; width: 400px; max-width: 90%; position: relative; }
+    .modal-content h3 { margin-top: 0; margin-bottom: 15px; color: var(--ink-1); }
+    .close-btn { position: absolute; right: 15px; top: 15px; font-size: 20px; cursor: pointer; border: none; background: none; }
+    .form-group { margin-bottom: 12px; }
+    .form-group label { display: block; margin-bottom: 4px; font-size: 14px; }
+    .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+  </style>
 </head>
 <body>
   <div id="app">
@@ -35,74 +44,69 @@
     </aside>
 
     <main class="main-content">
-      <!-- แดชบอร์ด -->
       <section id="view-dashboard" class="view active">
         <h2>ภาพรวมร้านค้า</h2>
         <p style="color: var(--ink-2); margin-bottom: 20px;">ข้อมูลจากฐานข้อมูลจริงแบบเรียลไทม์</p>
-        
         <div class="card">
           <h3>คำแนะนำสั่งซื้อเร่งด่วนจาก AI</h3>
           <div id="aiReorderWrap" style="margin-top: 10px;"></div>
         </div>
-
         <div class="card" style="margin-top: 20px;">
           <h3>สินค้าค้างสต็อกวิกฤต</h3>
           <div id="deadstockWrap" style="margin-top: 10px;"></div>
         </div>
       </section>
 
-      <!-- สินค้าและสต็อก -->
       <section id="view-products" class="view">
-        <div class="topbar">
+        <div class="topbar" style="display:flex; justify-content:space-between; align-items:center;">
           <h2>จัดการสินค้าและสต็อก</h2>
-          <button class="btn btn-primary" onclick="openProductForm()">+ เพิ่มสินค้าใหม่</button>
+          <button class="btn btn-primary" onclick="openProductForm()" style="padding:10px 15px; background:#D8933E; color:#fff; border:none; border-radius:4px; cursor:pointer;">+ เพิ่มสินค้าใหม่</button>
         </div>
         <div id="productsTableWrap"></div>
       </section>
 
-      <!-- รับสินค้าเข้า -->
-      <section id="view-receive" class="view">
-        <h2>รับสินค้าเข้าสต็อก</h2>
-        <div class="card" style="max-width:500px; margin-top: 15px;">
-          <form id="receiveForm">
-            <div class="form-group">
-              <label>เลือกสินค้า</label>
-              <select id="receiveProductSelect" required></select>
-            </div>
-            <div class="form-group">
-              <label>จำนวนที่รับเข้า</label>
-              <input type="number" id="receiveQty" min="1" required>
-            </div>
-            <button type="submit" class="btn btn-primary">บันทึกรับเข้า</button>
-          </form>
-        </div>
-      </section>
-
-      <!-- ขายสินค้า -->
-      <section id="view-sales" class="view">
-        <h2>บันทึกการขายสินค้า</h2>
-        <div class="card" style="max-width:500px; margin-top: 15px;">
-          <form id="salesForm">
-            <div class="form-group">
-              <label>เลือกสินค้า</label>
-              <select id="salesProductSelect" required></select>
-            </div>
-            <div class="form-group">
-              <label>จำนวนที่ขาย</label>
-              <input type="number" id="salesQty" min="1" required>
-            </div>
-            <button type="submit" class="btn btn-primary">บันทึกการขาย</button>
-          </form>
-        </div>
-      </section>
-
-      <!-- AI / PO / Supplier / Deadstock -->
-      <section id="view-forecast" class="view"><h2>คำแนะนำสั่งซื้อ AI</h2><div id="forecastTableWrap"></div></section>
-      <section id="view-po" class="view"><h2>รายการใบสั่งซื้อ (PO)</h2><div id="poTableWrap"></div></section>
-      <section id="view-suppliers" class="view"><h2>รายชื่อ Supplier</h2><div id="suppliersTableWrap"></div></section>
-      <section id="view-deadstock" class="view"><h2>สินค้าค้างสต็อก</h2><div id="deadstockTableWrap"></div></section>
-
+      <section id="view-receive" class="view"><h2>รับสินค้าเข้าสต็อก</h2></section>
+      <section id="view-sales" class="view"><h2>บันทึกการขายสินค้า</h2></section>
+      <section id="view-forecast" class="view"><h2>คำแนะนำสั่งซื้อ AI</h2></section>
+      <section id="view-po" class="view"><h2>รายการใบสั่งซื้อ (PO)</h2></section>
+      <section id="view-suppliers" class="view"><h2>รายชื่อ Supplier</h2></section>
+      <section id="view-deadstock" class="view"><h2>สินค้าค้างสต็อก</h2></section>
     </main>
+  </div>
+
+  <!-- Modal ฟอร์มเพิ่มสินค้า -->
+  <div id="productModal" class="modal">
+    <div class="modal-content">
+      <button class="close-btn" onclick="closeProductForm()">&times;</button>
+      <h3>เพิ่มสินค้าใหม่</h3>
+      <form id="productForm">
+        <div class="form-group">
+          <label>ชื่อสินค้า</label>
+          <input type="text" id="pName" required placeholder="เช่น เสื้อเชิ้ตแขนยาว">
+        </div>
+        <div class="form-group">
+          <label>หมวดหมู่</label>
+          <input type="text" id="pCategory" placeholder="เช่น เสื้อนักศึกษา">
+        </div>
+        <div class="form-group">
+          <label>ไซส์</label>
+          <input type="text" id="pSize" placeholder="เช่น M, L, XL">
+        </div>
+        <div class="form-group">
+          <label>จำนวนสต็อกเริ่มต้น</label>
+          <input type="number" id="pStock" value="0" min="0" required>
+        </div>
+        <div class="form-group">
+          <label>ราคาทุน (บาท)</label>
+          <input type="number" id="pCost" value="0" min="0" required>
+        </div>
+        <div class="form-group">
+          <label>ราคาขาย (บาท)</label>
+          <input type="number" id="pPrice" value="0" min="0" required>
+        </div>
+        <button type="submit" style="width:100%; padding:10px; background:#D8933E; color:#fff; border:none; border-radius:4px; margin-top:10px; cursor:pointer;">บันทึกสินค้า</button>
+      </form>
+    </div>
   </div>
 
   <script src="app.js"></script>
