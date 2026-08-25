@@ -1,6 +1,6 @@
 // Local In-Memory Storage Fallback
 let mockProducts = [
-  { id: "1", name: "กระโปรงพลีทกลีบเล็ก (เอว 25\" ยาว 18\")", category: "กระโปรงนักศึกษา", stock: 55, cost: 150, price: 200 },
+  { id: "1", name: "กระโปรงพลีทกลีบเล็ก (เอว 25\" ยาว 18\")", category: "กระโปรงนักศึกษา", stock: 50, cost: 150, price: 200 },
   { id: "2", name: "เสื้อนักศึกษาชาย แขนสั้น [ไม่มีสาบหลัง] (ขาวสว่าง) ไซส์ M", category: "เสื้อนักศึกษา", stock: 12, cost: 160, price: 220 },
   { id: "3", name: "กระโปรงทรงเอ (เอว 26\" ยาว 16\")", category: "กระโปรงนักศึกษา", stock: 8, cost: 140, price: 190 }
 ];
@@ -21,7 +21,7 @@ async function api(endpoint, options = {}) {
 }
 
 function handleLocalFallback(endpoint, options) {
-  const method = options.method || 'GET';
+  const method = (options.method || 'GET').toUpperCase();
   if (endpoint.startsWith('/products')) {
     const parts = endpoint.split('/');
     const prodId = parts[2];
@@ -184,7 +184,7 @@ async function loadDashboard() {
 }
 
 // ----------------------------------------------------
-// 2. หน้าสินค้าและสต็อก (เพิ่มปุ่ม แก้ไขตัวเลข + ลบ)
+// 2. หน้าสินค้าและสต็อก (ฟังก์ชันแก้ไขและลบสินค้า)
 // ----------------------------------------------------
 async function loadProducts() {
   const tableWrap = document.getElementById('productsTableWrap');
@@ -210,8 +210,9 @@ async function loadProducts() {
         </thead>
         <tbody>
           ${globalProducts.map(p => {
-            const pId = p.id || p._id;
+            const pId = String(p.id || p._id);
             const stock = getPStock(p);
+            const safeName = getPName(p).replace(/'/g, "\\'").replace(/"/g, '&quot;');
             return `
               <tr style="border-bottom:1px solid #f9f9f9;">
                 <td style="padding:10px;">${p.category || '-'}</td>
@@ -220,8 +221,8 @@ async function loadProducts() {
                 <td>${getPCost(p).toLocaleString()}</td>
                 <td><strong>${getPPrice(p).toLocaleString()}</strong></td>
                 <td style="text-align:center;">
-                  <button onclick="editStock('${pId}', ${stock})" title="แก้ไขจำนวนสต็อก" style="background:#ffc107; border:none; color:#333; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; margin-right:5px;">✏️ แก้ไขสต็อก</button>
-                  <button onclick="deleteProduct('${pId}', '${getPName(p)}')" title="ลบสินค้า" style="background:#dc3545; border:none; color:#fff; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold;">🗑️ ลบ</button>
+                  <button onclick="editStock('${pId}', ${stock})" title="แก้ไขจำนวนสต็อก" style="background:#ffc107; border:none; color:#333; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; margin-right:5px;">✏️ แก้ไขสต็อก</button>
+                  <button onclick="removeProductItem('${pId}', '${safeName}')" title="ลบสินค้า" style="background:#dc3545; border:none; color:#fff; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold;">🗑️ ลบ</button>
                 </td>
               </tr>
             `;
@@ -243,22 +244,32 @@ async function editStock(id, currentStock) {
     return;
   }
 
+  // อัปเดตผ่าน API หรือ Local Mock
   await api(`/products/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ stock: newStock })
   });
 
+  // อัปเดตตัวแปรในหน่วยความจำทันทีเพื่อความรวดเร็ว
+  const itemIndex = mockProducts.findIndex(p => String(p.id) === String(id));
+  if (itemIndex !== -1) mockProducts[itemIndex].stock = newStock;
+
   alert('อัปเดตจำนวนสต็อกเรียบร้อยแล้ว!');
   loadProducts();
 }
 
-// ฟังก์ชันลบสินค้า
-async function deleteProduct(id, name) {
+// ฟังก์ชันลบสินค้า (แก้ไขชื่อฟังก์ชันป้องกันการชนกับระบบอื่น)
+async function removeProductItem(id, name) {
   if (confirm(`คุณต้องการลบสินค้า "${name}" ออกจากระบบใช่หรือไม่?`)) {
     await api(`/products/${id}`, {
       method: 'DELETE'
     });
+
+    // ลบออกจาก Mock Array ในหน้าเว็บทันที
+    mockProducts = mockProducts.filter(p => String(p.id) !== String(id));
+    globalProducts = globalProducts.filter(p => String(p.id || p._id) !== String(id));
+
     alert('ลบสินค้าเรียบร้อยแล้ว!');
     loadProducts();
   }
@@ -333,7 +344,7 @@ async function loadDeadstock() {
 }
 
 // ----------------------------------------------------
-// 4. หน้าวิเคราะห์สต็อก AI (รายละเอียดการสั่งเพิ่ม/เคลียร์สต็อก)
+// 4. หน้าวิเคราะห์สต็อก AI (AI Analytics)
 // ----------------------------------------------------
 async function loadAIAnalyticsPage() {
   const target = document.getElementById('view-ai-analytics');
@@ -344,13 +355,11 @@ async function loadAIAnalyticsPage() {
     globalProducts = products;
   }
 
-  // คำนวณสินค้าต้องสั่งเพิ่ม (สต็อก <= 10) เกณฑ์เป้าหมายอยู่ที่ 30 ชิ้น
   const reorderList = globalProducts.filter(p => getPStock(p) <= 10).map(p => ({
     ...p,
     suggestedAdd: 30 - getPStock(p)
   }));
 
-  // คำนวณสินค้ารีบเคลียร์สต็อก (สต็อก >= 50) เกณฑ์ปกติอยู่ที่ 30 ชิ้น
   const clearList = globalProducts.filter(p => getPStock(p) >= 50).map(p => ({
     ...p,
     overStock: getPStock(p) - 30
@@ -361,7 +370,6 @@ async function loadAIAnalyticsPage() {
     <p style="color:#666; margin-bottom:20px;">ประมวลผลคำนวณจำนวนการเติมสต็อกและการระบายสินค้าอัตโนมัติ</p>
 
     <div style="display:flex; gap:20px; flex-wrap:wrap;">
-      <!-- กล่องสินค้าที่ควรสั่งเพิ่ม -->
       <div style="flex:1; min-width:320px; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-top:4px solid #17a2b8;">
         <h3 style="margin-top:0; color:#17a2b8;">🛒 รายการที่ควรสั่งซื้อเพิ่ม (Stock Reorder Target)</h3>
         ${reorderList.length > 0 ? `
@@ -386,7 +394,6 @@ async function loadAIAnalyticsPage() {
         ` : '<p style="color:#888;">ไม่มีสินค้าที่จำเป็นต้องสั่งเพิ่มในขณะนี้</p>'}
       </div>
 
-      <!-- กล่องสินค้าที่ควรรีบเคลียร์ -->
       <div style="flex:1; min-width:320px; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-top:4px solid #dc3545;">
         <h3 style="margin-top:0; color:#dc3545;">🔥 สินค้าที่ควรรีบเคลียร์สต็อก (Overstock Clearance)</h3>
         ${clearList.length > 0 ? `
