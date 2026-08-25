@@ -55,20 +55,17 @@ async function api(url, options = {}) {
 // ตัวแปรเก็บรายการสินค้า
 let globalProducts = [];
 
-// ฟังก์ชันลบสินค้า (บังคับแปลง ID เป็น String เพื่อเปรียบเทียบให้ตรงกัน 100%)
+// ฟังก์ชันลบสินค้า
 async function deleteProduct(productId, productName) {
   if (confirm(`คุณต้องการลบสินค้า "${productName}" ออกจากระบบใช่หรือไม่?`)) {
-    // 1. แปลงเป็น String แล้วกรองรายการที่ต้องการลบออก
     globalProducts = globalProducts.filter(p => String(p.id) !== String(productId));
 
-    // 2. พยายามยิง API ไปบอก Backend (ถ้ามี)
     try {
       await api(`/products/${productId}`, { method: 'DELETE' });
     } catch (err) {
       console.log('ยังไม่ได้เชื่อมต่อ API ลบฝั่ง Backend');
     }
 
-    // 3. แจ้งเตือนและสั่งวาดตารางใหม่ทันที
     alert(`🗑️ ลบสินค้า "${productName}" เรียบร้อยแล้ว`);
     renderProductsTable();
   }
@@ -130,13 +127,18 @@ async function loadProducts() {
 
 let salesHistory = [];
 
-// โหลดหน้า บันทึกการขายสินค้า
+// โหลดหน้า บันทึกการขายสินค้า (แก้ไขให้ดึงสินค้าถูกต้อง)
 async function loadSalesPage() {
-  const products = await api('/products');
+  if (globalProducts.length === 0) {
+    const products = await api('/products');
+    if (products && Array.isArray(products) && products.length > 0) {
+      globalProducts = products;
+    }
+  }
+
   const target = document.getElementById('view-sales');
   if (!target) return;
 
-  const activeProducts = products ? products.filter(p => globalProducts.some(gp => String(gp.id) === String(p.id))) : globalProducts;
   const totalSalesAmount = salesHistory.reduce((acc, item) => acc + item.total, 0);
 
   target.innerHTML = `
@@ -150,9 +152,9 @@ async function loadSalesPage() {
             <label style="display:block; margin-bottom:5px; font-weight:bold;">เลือกสินค้าที่ต้องการขาย:</label>
             <select id="saleProductId" required style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
               <option value="">-- เลือกรายการสินค้า --</option>
-              ${activeProducts.map(p => `
+              ${globalProducts.map(p => `
                 <option value="${p.id}" ${p.current_stock <= 0 ? 'disabled' : ''}>
-                  ${p.product_name}
+                  ${p.product_name} ${p.size ? `(ไซส์ ${p.size})` : ''} - คงเหลือ ${p.current_stock} ชิ้น
                 </option>
               `).join('')}
             </select>
@@ -210,7 +212,7 @@ async function loadSalesPage() {
       const productId = document.getElementById('saleProductId').value;
       const qty = parseInt(document.getElementById('saleQty').value) || 0;
 
-      const product = activeProducts.find(p => String(p.id) === String(productId));
+      const product = globalProducts.find(p => String(p.id) === String(productId));
       if (!product) return;
 
       if (qty > product.current_stock) {
@@ -235,14 +237,20 @@ async function loadSalesPage() {
 
 // โหลดหน้า แดชบอร์ด
 async function loadDashboard() {
-  const products = globalProducts.length > 0 ? globalProducts : await api('/products');
+  if (globalProducts.length === 0) {
+    const products = await api('/products');
+    if (products && Array.isArray(products) && products.length > 0) {
+      globalProducts = products;
+    }
+  }
+
   const target = document.getElementById('view-dashboard');
   if (!target) return;
 
   const threshold = 10;
-  const lowStockItems = products ? products.filter(p => p.current_stock <= threshold) : [];
-  const deadstockItems = products ? products.filter(p => p.current_stock > 0) : [];
-  const totalStock = products ? products.reduce((acc, p) => acc + p.current_stock, 0) : 0;
+  const lowStockItems = globalProducts.filter(p => p.current_stock <= threshold);
+  const deadstockItems = globalProducts.filter(p => p.current_stock > 0);
+  const totalStock = globalProducts.reduce((acc, p) => acc + p.current_stock, 0);
 
   target.innerHTML = `
     <h2>ภาพรวมร้านค้า</h2>
@@ -251,7 +259,7 @@ async function loadDashboard() {
     <div style="display:flex; gap:15px; margin-bottom:25px;">
       <div style="flex:1; background:#fff; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #007bff;">
         <span style="color:#666; font-size:14px;">รายการสินค้าทั้งหมด</span>
-        <h2 style="margin:5px 0 0 0; color:#007bff;">${products ? products.length : 0} รายการ</h2>
+        <h2 style="margin:5px 0 0 0; color:#007bff;">${globalProducts.length} รายการ</h2>
       </div>
       <div style="flex:1; background:#fff; padding:15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #28a745;">
         <span style="color:#666; font-size:14px;">สต็อกสินค้ารวม</span>
@@ -293,12 +301,18 @@ async function loadDashboard() {
 
 // โหลดระบบคำแนะนำ AI
 async function loadAIForecast() {
-  const products = globalProducts.length > 0 ? globalProducts : await api('/products');
+  if (globalProducts.length === 0) {
+    const products = await api('/products');
+    if (products && Array.isArray(products) && products.length > 0) {
+      globalProducts = products;
+    }
+  }
+
   const target = document.getElementById('view-forecast');
   if (!target) return;
 
   const threshold = 10;
-  const lowStockItems = products ? products.filter(p => p.current_stock <= threshold) : [];
+  const lowStockItems = globalProducts.filter(p => p.current_stock <= threshold);
 
   target.innerHTML = `
     <h2>🤖 คำแนะนำสั่งซื้อ (AI Smart Forecast)</h2>
@@ -342,11 +356,17 @@ async function loadAIForecast() {
 
 // โหลดหน้าสินค้าค้างสต็อก
 async function loadDeadstock() {
-  const products = globalProducts.length > 0 ? globalProducts : await api('/products');
+  if (globalProducts.length === 0) {
+    const products = await api('/products');
+    if (products && Array.isArray(products) && products.length > 0) {
+      globalProducts = products;
+    }
+  }
+
   const target = document.getElementById('view-deadstock');
   if (!target) return;
 
-  const deadstockItems = products ? products.filter(p => p.current_stock > 0) : [];
+  const deadstockItems = globalProducts.filter(p => p.current_stock > 0);
 
   target.innerHTML = `
     <h2>⚠️ สินค้าค้างสต็อก</h2>
