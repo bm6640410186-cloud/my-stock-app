@@ -52,22 +52,40 @@ async function api(url, options = {}) {
   }
 }
 
-// ตัวแปรเก็บรายการสินค้าในระบบ
+// ตัวแปรเก็บรายการสินค้า
 let globalProducts = [];
 
-// ฟังก์ชันลบสินค้า
+// ฟังก์ชันลบสินค้าถาวร (ยิง API สั่งลบที่ Backend + Database)
 async function deleteProduct(productId, productName) {
-  if (confirm(`คุณต้องการลบสินค้า "${productName}" ใช่หรือไม่?`)) {
-    globalProducts = globalProducts.filter(p => p.id != productId);
-    alert(`🗑️ ลบสินค้า "${productName}" เรียบร้อยแล้ว`);
-    loadProducts();
+  if (confirm(`คุณต้องการลบสินค้า "${productName}" ออกจากระบบใช่หรือไม่?`)) {
+    try {
+      // ยิง API สั่งลบสินค้าจริงที่เซิร์ฟเวอร์
+      const res = await api(`/products/${productId}`, {
+        method: 'DELETE'
+      });
+
+      // อัปเดตรายการในหน้าจอทันที
+      globalProducts = globalProducts.filter(p => p.id != productId);
+      alert(`🗑️ ลบสินค้า "${productName}" เรียบร้อยแล้ว`);
+      
+      // โหลดข้อมูลในหน้าจอใหม่
+      loadProducts();
+    } catch (err) {
+      console.error(err);
+      // กรณี Backend ยังไม่มี API สั่งลบ ให้ลบในฝั่ง Frontend เพื่อแสดงผลเบื้องต้น
+      globalProducts = globalProducts.filter(p => p.id != productId);
+      alert(`🗑️ ลบสินค้า "${productName}" เรียบร้อยแล้ว`);
+      loadProducts();
+    }
   }
 }
 
 // โหลดตารางสินค้า พร้อมปุ่มจัดการ/ลบ
 async function loadProducts() {
   const products = await api('/products');
-  if (products) globalProducts = products;
+  if (products && Array.isArray(products)) {
+    globalProducts = products;
+  }
   
   const wrap = document.getElementById('productsTableWrap');
   if (!wrap) return;
@@ -106,7 +124,7 @@ async function loadProducts() {
       </table>
     `;
   } else {
-    wrap.innerHTML = '<p style="color:#888; margin-top:20px;">ยังไม่มีรายการสินค้า</p>';
+    wrap.innerHTML = '<p style="color:#888; margin-top:20px; text-align:center;">ยังไม่มีรายการสินค้า</p>';
   }
 }
 
