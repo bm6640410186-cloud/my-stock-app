@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>StockUniform AI - ระบบจัดการสต็อกร้านชุดนักศึกษา</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="app">
@@ -18,30 +18,14 @@
       </div>
 
       <nav class="nav">
-        <a href="#" class="nav-item active" data-view="dashboard">
-          <span class="icon">📊</span> แดชบอร์ด
-        </a>
-        <a href="#" class="nav-item" data-view="products">
-          <span class="icon">📦</span> สินค้าและสต็อก
-        </a>
-        <a href="#" class="nav-item" data-view="receive">
-          <span class="icon">📥</span> รับสินค้าเข้า
-        </a>
-        <a href="#" class="nav-item" data-view="sales">
-          <span class="icon">🛒</span> ขายสินค้า
-        </a>
-        <a href="#" class="nav-item" data-view="forecast">
-          <span class="icon">🤖</span> คำแนะนำสั่งซื้อ (AI)
-        </a>
-        <a href="#" class="nav-item" data-view="po">
-          <span class="icon">📄</span> ใบสั่งซื้อ
-        </a>
-        <a href="#" class="nav-item" data-view="suppliers">
-          <span class="icon">🏭</span> Supplier
-        </a>
-        <a href="#" class="nav-item" data-view="deadstock">
-          <span class="icon">⚠️</span> สินค้าค้างสต็อก
-        </a>
+        <a href="#" class="nav-item active" data-view="dashboard">📊 แดชบอร์ด</a>
+        <a href="#" class="nav-item" data-view="products">📦 สินค้าและสต็อก</a>
+        <a href="#" class="nav-item" data-view="receive">📥 รับสินค้าเข้า</a>
+        <a href="#" class="nav-item" data-view="sales">🛒 ขายสินค้า</a>
+        <a href="#" class="nav-item" data-view="forecast">🤖 คำแนะนำสั่งซื้อ (AI)</a>
+        <a href="#" class="nav-item" data-view="po">📄 ใบสั่งซื้อ</a>
+        <a href="#" class="nav-item" data-view="suppliers">🏭 Supplier</a>
+        <a href="#" class="nav-item" data-view="deadstock">⚠️ สินค้าค้างสต็อก</a>
       </nav>
 
       <div class="user-footer">
@@ -51,58 +35,35 @@
     </aside>
 
     <main class="main-content">
-      <!-- 1. แดชบอร์ด -->
-      <section id="view-dashboard" class="view">
+      <!-- แดชบอร์ด -->
+      <section id="view-dashboard" class="view active">
         <h2>ภาพรวมร้านค้า</h2>
-        <p class="sub">ข้อมูลจากฐานข้อมูลจริงแบบเรียลไทม์</p>
+        <p style="color: var(--ink-2); margin-bottom: 20px;">ข้อมูลจากฐานข้อมูลจริงแบบเรียลไทม์</p>
         
         <div class="card">
           <h3>คำแนะนำสั่งซื้อเร่งด่วนจาก AI</h3>
-          <div id="aiReorderWrap"></div>
-          <div style="text-align:right; margin-top:8px;">
-            <a href="#" class="link" onclick="switchView('forecast')">ดูทั้งหมด &rarr;</a>
-          </div>
+          <div id="aiReorderWrap" style="margin-top: 10px;"></div>
         </div>
 
-        <div class="card" style="margin-top:16px;">
+        <div class="card" style="margin-top: 20px;">
           <h3>สินค้าค้างสต็อกวิกฤต</h3>
-          <div id="deadstockWrap"></div>
-          <div style="text-align:right; margin-top:8px;">
-            <a href="#" class="link" onclick="switchView('deadstock')">ดูทั้งหมด &rarr;</a>
-          </div>
+          <div id="deadstockWrap" style="margin-top: 10px;"></div>
         </div>
       </section>
 
-      <!-- 2. สินค้าและสต็อก -->
-      <section id="view-products" class="view" style="display:none;">
+      <!-- สินค้าและสต็อก -->
+      <section id="view-products" class="view">
         <div class="topbar">
           <h2>จัดการสินค้าและสต็อก</h2>
           <button class="btn btn-primary" onclick="openProductForm()">+ เพิ่มสินค้าใหม่</button>
         </div>
-
-        <div class="filter-bar">
-          <input type="text" id="productSearch" placeholder="ค้นหาชื่อ, SKU..." oninput="debounceSearch()">
-          <select id="categoryFilter">
-            <option value="">ทุกหมวดหมู่</option>
-            <option value="เสื้อ">เสื้อ</option>
-            <option value="กระโปรง">กระโปรง</option>
-            <option value="กางเกง">กางเกง</option>
-            <option value="อุปกรณ์">อุปกรณ์</option>
-          </select>
-          <select id="statusFilter">
-            <option value="">ทุกสถานะสต็อก</option>
-            <option value="low">สต็อกต่ำกว่าจุดสั่งซื้อ</option>
-            <option value="out">สินค้าหมด</option>
-          </select>
-        </div>
-
         <div id="productsTableWrap"></div>
       </section>
 
-      <!-- 3. รับสินค้าเข้า -->
-      <section id="view-receive" class="view" style="display:none;">
+      <!-- รับสินค้าเข้า -->
+      <section id="view-receive" class="view">
         <h2>รับสินค้าเข้าสต็อก</h2>
-        <div class="card" style="max-width:500px;">
+        <div class="card" style="max-width:500px; margin-top: 15px;">
           <form id="receiveForm">
             <div class="form-group">
               <label>เลือกสินค้า</label>
@@ -112,19 +73,15 @@
               <label>จำนวนที่รับเข้า</label>
               <input type="number" id="receiveQty" min="1" required>
             </div>
-            <div class="form-group">
-              <label>หมายเหตุ / เลขที่ใบส่งของ</label>
-              <input type="text" id="receiveNote" placeholder="เช่น PO-2026001">
-            </div>
             <button type="submit" class="btn btn-primary">บันทึกรับเข้า</button>
           </form>
         </div>
       </section>
 
-      <!-- 4. ขายสินค้า -->
-      <section id="view-sales" class="view" style="display:none;">
+      <!-- ขายสินค้า -->
+      <section id="view-sales" class="view">
         <h2>บันทึกการขายสินค้า</h2>
-        <div class="card" style="max-width:500px;">
+        <div class="card" style="max-width:500px; margin-top: 15px;">
           <form id="salesForm">
             <div class="form-group">
               <label>เลือกสินค้า</label>
@@ -139,106 +96,15 @@
         </div>
       </section>
 
-      <!-- 5. คำแนะนำสั่งซื้อ AI -->
-      <section id="view-forecast" class="view" style="display:none;">
-        <h2>คำแนะนำสั่งซื้อสินค้าจาก AI</h2>
-        <div id="forecastTableWrap"></div>
-      </section>
+      <!-- AI / PO / Supplier / Deadstock -->
+      <section id="view-forecast" class="view"><h2>คำแนะนำสั่งซื้อ AI</h2><div id="forecastTableWrap"></div></section>
+      <section id="view-po" class="view"><h2>รายการใบสั่งซื้อ (PO)</h2><div id="poTableWrap"></div></section>
+      <section id="view-suppliers" class="view"><h2>รายชื่อ Supplier</h2><div id="suppliersTableWrap"></div></section>
+      <section id="view-deadstock" class="view"><h2>สินค้าค้างสต็อก</h2><div id="deadstockTableWrap"></div></section>
 
-      <!-- 6. ใบสั่งซื้อ PO -->
-      <section id="view-po" class="view" style="display:none;">
-        <div class="topbar">
-          <h2>รายการใบสั่งซื้อ (PO)</h2>
-          <button class="btn btn-primary" onclick="openPOForm()">+ ออกใบสั่งซื้อใหม่</button>
-        </div>
-        <div id="poTableWrap"></div>
-      </section>
-
-      <!-- 7. Supplier -->
-      <section id="view-suppliers" class="view" style="display:none;">
-        <div class="topbar">
-          <h2>รายชื่อ Supplier</h2>
-          <button class="btn btn-primary" onclick="openSupplierForm()">+ เพิ่ม Supplier</button>
-        </div>
-        <div id="suppliersTableWrap"></div>
-      </section>
-
-      <!-- 8. Deadstock -->
-      <section id="view-deadstock" class="view" style="display:none;">
-        <h2>วิเคราะห์สินค้าค้างสต็อก (Deadstock)</h2>
-        <div id="deadstockTableWrap"></div>
-      </section>
-
-      <!-- Modal ฟอร์มสินค้า -->
-      <div id="productModal" class="modal" style="display:none;">
-        <div class="modal-content">
-          <h3 id="productModalTitle">เพิ่มสินค้า</h3>
-          <form id="productForm">
-            <input type="hidden" id="pmId">
-            <div class="form-group">
-              <label>ชื่อสินค้า</label>
-              <input type="text" id="pmName" required>
-            </div>
-            <div class="form-group">
-              <label>หมวดหมู่</label>
-              <select id="pmCategory">
-                <option value="เสื้อ">เสื้อ</option>
-                <option value="กระโปรง">กระโปรง</option>
-                <option value="กางเกง">กางเกง</option>
-                <option value="อุปกรณ์">อุปกรณ์</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>ไซส์</label>
-              <input type="text" id="pmSize" placeholder="เช่น S, M, L, 36, 38">
-            </div>
-            <div class="form-group">
-              <label>ราคาทุน</label>
-              <input type="number" id="pmCost" min="0" value="0" required>
-            </div>
-            <div class="form-group">
-              <label>ราคาขาย</label>
-              <input type="number" id="pmPrice" min="0" value="0" required>
-            </div>
-            <div class="form-group">
-              <label>จุดสั่งซื้อใหม่ (Reorder Point)</label>
-              <input type="number" id="pmReorder" min="0" value="10" required>
-            </div>
-            <div class="modal-actions">
-              <button type="button" class="btn" onclick="closeModal('productModal')">ยกเลิก</button>
-              <button type="submit" class="btn btn-primary">บันทึก</button>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <!-- Modal ฟอร์ม Supplier -->
-      <div id="supplierModal" class="modal" style="display:none;">
-        <div class="modal-content">
-          <h3>เพิ่ม Supplier ใหม่</h3>
-          <form id="supplierForm">
-            <div class="form-group">
-              <label>ชื่อ Supplier / โรงงาน</label>
-              <input type="text" id="supName" required>
-            </div>
-            <div class="form-group">
-              <label>เบอร์โทรศัพท์</label>
-              <input type="text" id="supPhone">
-            </div>
-            <div class="form-group">
-              <label>ระยะเวลาจัดส่งโดยประมาณ (วัน)</label>
-              <input type="number" id="supLeadTime" min="1" value="7">
-            </div>
-            <div class="modal-actions">
-              <button type="button" class="btn" onclick="closeModal('supplierModal')">ยกเลิก</button>
-              <button type="submit" class="btn btn-primary">บันทึก</button>
-            </div>
-          </form>
-        </div>
-      </div>
     </main>
   </div>
 
-  <script src="/js/app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
