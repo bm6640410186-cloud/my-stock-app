@@ -55,32 +55,27 @@ async function api(url, options = {}) {
 // ตัวแปรเก็บรายการสินค้า
 let globalProducts = [];
 
-// ฟังก์ชันลบสินค้า (ลบในหน้าจอทันที + พยายามส่งลบไป Backend)
+// ฟังก์ชันลบสินค้า (บังคับแปลง ID เป็น String เพื่อเปรียบเทียบให้ตรงกัน 100%)
 async function deleteProduct(productId, productName) {
   if (confirm(`คุณต้องการลบสินค้า "${productName}" ออกจากระบบใช่หรือไม่?`)) {
-    // 1. ลบออกจากรายการในหน้าจอทันที
-    globalProducts = globalProducts.filter(p => p.id != productId);
+    // 1. แปลงเป็น String แล้วกรองรายการที่ต้องการลบออก
+    globalProducts = globalProducts.filter(p => String(p.id) !== String(productId));
 
-    // 2. พยายามยิง API ไปบอกเซิร์ฟเวอร์ให้ลบ (ถ้ามี)
+    // 2. พยายามยิง API ไปบอก Backend (ถ้ามี)
     try {
       await api(`/products/${productId}`, { method: 'DELETE' });
     } catch (err) {
       console.log('ยังไม่ได้เชื่อมต่อ API ลบฝั่ง Backend');
     }
 
-    // 3. แจ้งเตือนและอัปเดตตารางใหม่ทันที
+    // 3. แจ้งเตือนและสั่งวาดตารางใหม่ทันที
     alert(`🗑️ ลบสินค้า "${productName}" เรียบร้อยแล้ว`);
-    loadProducts();
+    renderProductsTable();
   }
 }
 
-// โหลดตารางสินค้า พร้อมปุ่มจัดการ/ลบ
-async function loadProducts() {
-  const products = await api('/products');
-  if (products && Array.isArray(products) && products.length > 0) {
-    globalProducts = products;
-  }
-  
+// ฟังก์ชันวาดตารางสินค้า
+function renderProductsTable() {
   const wrap = document.getElementById('productsTableWrap');
   if (!wrap) return;
 
@@ -122,6 +117,17 @@ async function loadProducts() {
   }
 }
 
+// โหลดข้อมูลสินค้า
+async function loadProducts() {
+  if (globalProducts.length === 0) {
+    const products = await api('/products');
+    if (products && Array.isArray(products) && products.length > 0) {
+      globalProducts = products;
+    }
+  }
+  renderProductsTable();
+}
+
 let salesHistory = [];
 
 // โหลดหน้า บันทึกการขายสินค้า
@@ -130,7 +136,7 @@ async function loadSalesPage() {
   const target = document.getElementById('view-sales');
   if (!target) return;
 
-  const activeProducts = products ? products.filter(p => globalProducts.some(gp => gp.id == p.id)) : globalProducts;
+  const activeProducts = products ? products.filter(p => globalProducts.some(gp => String(gp.id) === String(p.id))) : globalProducts;
   const totalSalesAmount = salesHistory.reduce((acc, item) => acc + item.total, 0);
 
   target.innerHTML = `
@@ -204,7 +210,7 @@ async function loadSalesPage() {
       const productId = document.getElementById('saleProductId').value;
       const qty = parseInt(document.getElementById('saleQty').value) || 0;
 
-      const product = activeProducts.find(p => p.id == productId);
+      const product = activeProducts.find(p => String(p.id) === String(productId));
       if (!product) return;
 
       if (qty > product.current_stock) {
@@ -227,7 +233,7 @@ async function loadSalesPage() {
   }
 }
 
-// โหลดหน้า แดชบอร์ด (Dashboard)
+// โหลดหน้า แดชบอร์ด
 async function loadDashboard() {
   const products = globalProducts.length > 0 ? globalProducts : await api('/products');
   const target = document.getElementById('view-dashboard');
@@ -281,30 +287,6 @@ async function loadDashboard() {
           </tbody>
         </table>
       ` : '<p style="color:#5cb85c; margin:10px 0 0 0;">✅ สินค้าทุกรายการอยู่ในระดับปลอดภัย</p>'}
-    </div>
-
-    <div style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-      <h3 style="margin-top:0;">⚠️ สินค้าค้างสต็อกวิกฤต</h3>
-      ${deadstockItems.length > 0 ? `
-        <table style="width:100%; border-collapse:collapse; margin-top:10px;">
-          <thead>
-            <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
-              <th style="padding:10px;">ชื่อสินค้า</th>
-              <th>จำนวนค้างสต็อก</th>
-              <th>มูลค่าทุนรวม</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${deadstockItems.map(p => `
-              <tr style="border-bottom:1px solid #f9f9f9;">
-                <td style="padding:10px;">${p.product_name} (${p.size || '-'})</td>
-                <td><strong>${p.current_stock}</strong> ชิ้น</td>
-                <td>${(p.current_stock * p.cost_price).toLocaleString()} ฿</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      ` : '<p style="color:#888; margin:10px 0 0 0;">ไม่มีสินค้าค้างสต็อก</p>'}
     </div>
   `;
 }
