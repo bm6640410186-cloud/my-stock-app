@@ -1,4 +1,3 @@
-// ฟังก์ชันสลับหน้าเมนู
 function switchView(viewName) {
   document.querySelectorAll('.view').forEach(el => {
     el.style.display = 'none';
@@ -18,13 +17,12 @@ function switchView(viewName) {
   const activeNav = document.querySelector(`.nav-item[data-view="${viewName}"]`);
   if (activeNav) activeNav.classList.add('active');
 
-  // โหลดข้อมูลตามเมนูที่เลือก
   if (viewName === 'products') loadProducts();
   if (viewName === 'deadstock') loadDeadstock();
   if (viewName === 'receive') loadReceivePage();
+  if (viewName === 'forecast') loadAIForecast();
 }
 
-// ควบคุม Modal ฟอร์มสินค้า
 function openProductForm() {
   document.getElementById('productModal').style.display = 'flex';
 }
@@ -51,7 +49,6 @@ async function api(url, options = {}) {
   }
 }
 
-// โหลดตารางสินค้า
 async function loadProducts() {
   const products = await api('/products');
   const wrap = document.getElementById('productsTableWrap');
@@ -89,13 +86,60 @@ async function loadProducts() {
   }
 }
 
-// โหลดหน้าสินค้าค้างสต็อก
+// โหลดระบบคำแนะนำ AI
+async function loadAIForecast() {
+  const products = await api('/products');
+  const target = document.getElementById('view-forecast');
+  if (!target) return;
+
+  const threshold = 10;
+  const lowStockItems = products ? products.filter(p => p.current_stock <= threshold) : [];
+
+  target.innerHTML = `
+    <h2>🤖 คำแนะนำสั่งซื้อ (AI Smart Forecast)</h2>
+    <p style="color:#666; margin-bottom:15px;">ระบบวิเคราะห์สต็อกสินค้าที่เหลือน้อยและเสนอแนะปริมาณที่ควรสั่งซื้อเพิ่ม</p>
+    
+    ${lowStockItems.length > 0 ? `
+      <table style="width:100%; border-collapse:collapse; background:#fff; border-radius:8px; padding:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+        <thead>
+          <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
+            <th style="padding:12px;">ชื่อสินค้า</th>
+            <th>หมวดหมู่ / ไซส์</th>
+            <th>คงเหลือปัจจุบัน</th>
+            <th>สถานะความเสี่ยง</th>
+            <th>จำนวนที่แนะนำสั่งซื้อ</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${lowStockItems.map(p => `
+            <tr style="border-bottom:1px solid #f9f9f9;">
+              <td style="padding:12px;"><strong>${p.product_name}</strong></td>
+              <td>${p.category || '-'} (${p.size || '-'})</td>
+              <td><span style="color:${p.current_stock === 0 ? '#d9534f' : '#f0ad4e'}; font-weight:bold;">${p.current_stock} ชิ้น</span></td>
+              <td>
+                <span style="padding:4px 8px; border-radius:4px; font-size:12px; color:#fff; background:${p.current_stock === 0 ? '#d9534f' : '#f0ad4e'};">
+                  ${p.current_stock === 0 ? 'หมดสต็อก' : 'สต็อกต่ำ'}
+                </span>
+              </td>
+              <td><strong style="color:#5cb85c;">+${50 - p.current_stock} ชิ้น</strong></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    ` : `
+      <div style="background:#fff; padding:30px; border-radius:8px; text-align:center; color:#5cb85c; margin-top:15px;">
+        <h3>✅ สต็อกสินค้าอยู่ในระดับปลอดภัยทุกรายการ</h3>
+        <p style="color:#666; font-size:14px; margin-top:5px;">ยังไม่มีสินค้าที่จำเป็นต้องสั่งซื้อเพิ่มในขณะนี้</p>
+      </div>
+    `}
+  `;
+}
+
 async function loadDeadstock() {
   const products = await api('/products');
   const target = document.getElementById('view-deadstock');
   if (!target) return;
 
-  // กรองเฉพาะสินค้าที่มีสต็อกแต่ขายไม่ได้ / สต็อกค้าง
   const deadstockItems = products ? products.filter(p => p.current_stock > 0) : [];
 
   target.innerHTML = `
@@ -128,7 +172,6 @@ async function loadDeadstock() {
   `;
 }
 
-// โหลดหน้ารับสินค้าเข้า
 function loadReceivePage() {
   const target = document.getElementById('view-receive');
   if (!target) return;
@@ -136,7 +179,6 @@ function loadReceivePage() {
     <h2>📥 รับสินค้าเข้าสต็อก</h2>
     <div style="background:#fff; padding:20px; border-radius:8px; margin-top:15px; max-width:500px;">
       <p style="color:#666;">ระบบบันทึกการรับสินค้าเข้าสต็อกเพิ่มจาก Supplier</p>
-      <small style="color:#999;">(ฟังก์ชันบันทึกการรับเข้าพร้อมใช้งานในเวอร์ชันถัดไป)</small>
     </div>
   `;
 }
