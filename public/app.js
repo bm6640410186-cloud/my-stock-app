@@ -127,7 +127,7 @@ async function loadProducts() {
 
 let salesHistory = [];
 
-// โหลดหน้า บันทึกการขายสินค้า (แก้ไขให้ดึงสินค้าถูกต้อง)
+// โหลดหน้า บันทึกการขายสินค้า (แสดงเฉพาะชื่อสินค้า)
 async function loadSalesPage() {
   if (globalProducts.length === 0) {
     const products = await api('/products');
@@ -154,7 +154,7 @@ async function loadSalesPage() {
               <option value="">-- เลือกรายการสินค้า --</option>
               ${globalProducts.map(p => `
                 <option value="${p.id}" ${p.current_stock <= 0 ? 'disabled' : ''}>
-                  ${p.product_name} ${p.size ? `(ไซส์ ${p.size})` : ''} - คงเหลือ ${p.current_stock} ชิ้น
+                  ${p.product_name}
                 </option>
               `).join('')}
             </select>
