@@ -157,7 +157,7 @@ async function loadProducts() {
   renderProductsTable();
 }
 
-// โหลดหน้า บันทึกการขายสินค้า
+// โหลดหน้า บันทึกการขายสินค้า (แสดงหมวดหมู่, ทรง/แบบ, สี, ไซส์ ให้เลือกชัดเจน)
 async function loadSalesPage() {
   if (globalProducts.length === 0) {
     const products = await api('/products');
@@ -182,11 +182,18 @@ async function loadSalesPage() {
             <label style="display:block; margin-bottom:5px; font-weight:bold;">เลือกสินค้าที่ต้องการขาย:</label>
             <select id="saleProductId" required style="width:100%; padding:10px; border:1px solid #ccc; border-radius:4px;">
               <option value="">-- เลือกรายการสินค้า --</option>
-              ${globalProducts.map(p => `
-                <option value="${p.id}" ${p.current_stock <= 0 ? 'disabled' : ''}>
-                  ${p.product_name} ${p.size ? `(${p.size})` : ''} (คงเหลือ: ${p.current_stock})
-                </option>
-              `).join('')}
+              ${globalProducts.map(p => {
+                const categoryText = p.category ? `[${p.category}] ` : '';
+                const sizeText = p.size ? ` (${p.size})` : '';
+                const stockText = ` - คงเหลือ: ${p.current_stock} ชิ้น`;
+                const priceText = p.selling_price ? ` | ${p.selling_price}฿` : '';
+
+                return `
+                  <option value="${p.id}" ${p.current_stock <= 0 ? 'disabled' : ''}>
+                    ${categoryText}${p.product_name}${sizeText}${priceText}${stockText}
+                  </option>
+                `;
+              }).join('')}
             </select>
           </div>
 
@@ -215,6 +222,7 @@ async function loadSalesPage() {
           <thead>
             <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
               <th style="padding:10px;">รายการสินค้า</th>
+              <th>รายละเอียด/ไซส์</th>
               <th>จำนวนที่ขาย</th>
               <th>ราคาต่อชิ้น</th>
               <th>ราคารวม</th>
@@ -224,6 +232,7 @@ async function loadSalesPage() {
             ${salesHistory.map(s => `
               <tr style="border-bottom:1px solid #f9f9f9;">
                 <td style="padding:10px;"><strong>${s.product_name}</strong></td>
+                <td>${s.size || '-'}</td>
                 <td>${s.qty} ชิ้น</td>
                 <td>${s.price.toLocaleString()} ฿</td>
                 <td><strong style="color:#28a745;">${s.total.toLocaleString()} ฿</strong></td>
@@ -253,7 +262,8 @@ async function loadSalesPage() {
       product.current_stock -= qty;
 
       salesHistory.unshift({
-        product_name: product.product_name,
+        product_name: `${product.category ? `[${product.category}] ` : ''}${product.product_name}`,
+        size: product.size || '-',
         qty: qty,
         price: product.selling_price || 0,
         total: qty * (product.selling_price || 0)
