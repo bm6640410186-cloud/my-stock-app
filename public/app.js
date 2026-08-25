@@ -8,11 +8,11 @@ function getStoredProducts() {
       console.error("Error parsing local products", e);
     }
   }
-  // ค่าเริ่มต้นกรณีใช้งานครั้งแรก
   return [
     { id: "1", name: "กระโปรงพลีทกลีบเล็ก (เอว 25\" ยาว 18\")", category: "กระโปรงนักศึกษา", stock: 50, cost: 150, price: 200 },
     { id: "2", name: "เสื้อนักศึกษาชาย แขนสั้น [ไม่มีสาบหลัง] (ขาวสว่าง) ไซส์ M", category: "เสื้อนักศึกษา", stock: 12, cost: 160, price: 220 },
-    { id: "3", name: "กระโปรงทรงเอ (เอว 26\" ยาว 16\")", category: "กระโปรงนักศึกษา", stock: 8, cost: 140, price: 190 }
+    { id: "3", name: "เสื้อนักศึกษาหญิง แขนสั้น [ไม่มีสาบหลัง] (ขาวโอโม่) ไซส์ L", category: "เสื้อนักศึกษา", stock: 25, cost: 160, price: 220 },
+    { id: "4", name: "กระโปรงทรงเอ (เอว 26\" ยาว 16\")", category: "กระโปรงนักศึกษา", stock: 8, cost: 140, price: 190 }
   ];
 }
 
@@ -23,9 +23,9 @@ function saveProductsToStorage(products) {
 
 let mockProducts = getStoredProducts();
 let globalProducts = [];
-let deadstockViewMode = 'deadstock'; // 'deadstock' หรือ 'all_cost'
+let deadstockViewMode = 'deadstock';
 
-// ฟังก์ชันเรียก API
+// ฟังก์ชันเรียก API (Fallback LocalStorage)
 async function api(endpoint, options = {}) {
   try {
     const res = await fetch(endpoint, options);
@@ -129,6 +129,23 @@ function getPStock(p) { return Number(p.stock ?? p.current_stock ?? 0); }
 function getPCost(p) { return Number(p.cost ?? p.cost_price ?? 0); }
 function getPPrice(p) { return Number(p.price ?? p.selling_price ?? 0); }
 
+// ฟังก์ชันสำหรับค้นหา Real-time ในหน้าสินค้า
+function filterProducts() {
+  const input = document.getElementById('searchInput');
+  if (!input) return;
+  const keyword = input.value.toLowerCase().trim();
+  const rows = document.querySelectorAll('#productsTableWrap table tbody tr');
+
+  rows.forEach(row => {
+    const text = row.innerText.toLowerCase();
+    if (text.includes(keyword)) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
+}
+
 // 1. หน้าแดชบอร์ด (Dashboard)
 async function loadDashboard() {
   const target = document.getElementById('view-dashboard');
@@ -202,7 +219,7 @@ async function loadDashboard() {
   `;
 }
 
-// 2. หน้าสินค้าและสต็อก (แก้ไขราคาทุน/ขาย + สรุปราคาทุนรวม)
+// 2. หน้าสินค้าและสต็อก
 async function loadProducts() {
   const tableWrap = document.getElementById('productsTableWrap');
   if (!tableWrap) return;
@@ -264,6 +281,9 @@ async function loadProducts() {
       </table>
     </div>
   `;
+
+  // เรียกกรองค้นหาซ้ำอีกครั้งหากมีคำค้นหาค้างอยู่
+  filterProducts();
 }
 
 async function editProductDetails(id, currentStock, currentCost, currentPrice) {
