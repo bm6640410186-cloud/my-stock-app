@@ -1,34 +1,35 @@
-// สลับหน้าจอ (View Navigation)
 function switchView(viewName) {
-  // ซ่อนทุก view
   document.querySelectorAll('.view').forEach(el => {
     el.style.display = 'none';
     el.classList.remove('active');
   });
 
-  // แสดง view ที่เลือก
   const target = document.getElementById(`view-${viewName}`);
   if (target) {
     target.style.display = 'block';
     target.classList.add('active');
   }
 
-  // อัปเดตสถานะ Active บน Sidebar
   document.querySelectorAll('.nav-item').forEach(el => {
     el.classList.remove('active');
   });
   
   const activeNav = document.querySelector(`.nav-item[data-view="${viewName}"]`);
-  if (activeNav) {
-    activeNav.classList.add('active');
-  }
+  if (activeNav) activeNav.classList.add('active');
 
-  // โหลดข้อมูลเฉพาะหน้า
-  if (viewName === 'dashboard') loadDashboard();
   if (viewName === 'products') loadProducts();
 }
 
-// เรียก API
+// ควบคุม Modal ฟอร์มสินค้า
+function openProductForm() {
+  document.getElementById('productModal').style.display = 'flex';
+}
+
+function closeProductForm() {
+  document.getElementById('productModal').style.display = 'none';
+  document.getElementById('productForm').reset();
+}
+
 async function api(url, options = {}) {
   try {
     const res = await fetch(`/api${url}`, {
@@ -46,27 +47,6 @@ async function api(url, options = {}) {
   }
 }
 
-// โหลดข้อมูล Dashboard
-async function loadDashboard() {
-  const forecast = await api('/ai/reorder-recommendations');
-  const deadstock = await api('/ai/deadstock');
-
-  const aiWrap = document.getElementById('aiReorderWrap');
-  if (aiWrap) {
-    aiWrap.innerHTML = forecast && forecast.length > 0 
-      ? forecast.map(i => `<p>• <strong>${i.product_name}</strong> แนะนำสั่งเพิ่ม ${i.recommended_order_qty} ชิ้น</p>`).join('')
-      : '<p style="color:var(--ink-3);">ไม่มีรายการเตือนสั่งซื้อเร่งด่วน</p>';
-  }
-
-  const dsWrap = document.getElementById('deadstockWrap');
-  if (dsWrap) {
-    dsWrap.innerHTML = deadstock && deadstock.length > 0 
-      ? deadstock.map(i => `<p>• <strong>${i.product_name}</strong> สินค้าค้างสต็อก ${i.current_stock} ชิ้น</p>`).join('')
-      : '<p style="color:var(--ink-3);">สต็อกอยู่ในเกณฑ์ปกติ</p>';
-  }
-}
-
-// โหลดรายการสินค้า
 async function loadProducts() {
   const products = await api('/products');
   const wrap = document.getElementById('productsTableWrap');
@@ -74,10 +54,10 @@ async function loadProducts() {
 
   if (products && products.length > 0) {
     wrap.innerHTML = `
-      <table style="width:100%; border-collapse:collapse; margin-top:15px; background:#fff; border-radius:8px; padding:15px;">
+      <table style="width:100%; border-collapse:collapse; margin-top:15px; background:#fff; border-radius:8px; padding:15px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
         <thead>
-          <tr style="border-bottom:2px solid var(--paper); text-align:left; color:var(--ink-2);">
-            <th style="padding:10px;">ชื่อสินค้า</th>
+          <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
+            <th style="padding:12px;">ชื่อสินค้า</th>
             <th>หมวดหมู่</th>
             <th>ไซส์</th>
             <th>คงเหลือ</th>
@@ -87,11 +67,11 @@ async function loadProducts() {
         </thead>
         <tbody>
           ${products.map(p => `
-            <tr style="border-bottom:1px solid #f0f0f0;">
-              <td style="padding:10px;">${p.product_name}</td>
+            <tr style="border-bottom:1px solid #f9f9f9;">
+              <td style="padding:12px;">${p.product_name}</td>
               <td>${p.category || '-'}</td>
               <td>${p.size || '-'}</td>
-              <td>${p.current_stock}</td>
+              <td><strong>${p.current_stock}</strong></td>
               <td>${p.cost_price} ฿</td>
               <td>${p.selling_price} ฿</td>
             </tr>
@@ -100,13 +80,11 @@ async function loadProducts() {
       </table>
     `;
   } else {
-    wrap.innerHTML = '<p style="color:var(--ink-3); margin-top:15px;">ยังไม่มีรายการสินค้า</p>';
+    wrap.innerHTML = '<p style="color:#888; margin-top:20px;">ยังไม่มีรายการสินค้า</p>';
   }
 }
 
-// ผูกระบบคลิกเมนูและปุ่มออกจากระบบ
 document.addEventListener('DOMContentLoaded', () => {
-  // คลิกเมนู Sidebar
   document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', (e) => {
       e.preventDefault();
@@ -115,7 +93,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // ปุ่มออกจากระบบ
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async (e) => {
@@ -125,6 +102,31 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // เริ่มต้นหน้า Dashboard
+  // Submit ฟอร์มสินค้า
+  const productForm = document.getElementById('productForm');
+  if (productForm) {
+    productForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const newProduct = {
+        product_name: document.getElementById('pName').value,
+        category: document.getElementById('pCategory').value,
+        size: document.getElementById('pSize').value,
+        current_stock: parseInt(document.getElementById('pStock').value) || 0,
+        cost_price: parseFloat(document.getElementById('pCost').value) || 0,
+        selling_price: parseFloat(document.getElementById('pPrice').value) || 0
+      };
+
+      const res = await api('/products', {
+        method: 'POST',
+        body: JSON.stringify(newProduct)
+      });
+
+      if (res) {
+        closeProductForm();
+        loadProducts();
+      }
+    });
+  }
+
   switchView('dashboard');
 });
