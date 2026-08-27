@@ -49,7 +49,7 @@
       </div>
 
       <!-- ช่องค้นหา Real-time -->
-      <input type="text" id="searchInput" class="search-box" placeholder="🔍 ค้นหาชื่อสินค้า, สี (ขาวโอโม่), ไซส์, หรือหมวดหมู่..." onkeyup="filterProducts()">
+      <input type="text" id="searchInput" class="search-box" placeholder="🔍 ค้นหาชื่อสินค้า, สี, ไซส์, ทรงกระโปรง, หรือหมวดหมู่..." onkeyup="filterProducts()">
 
       <div id="productsTableWrap"></div>
     </div>
@@ -73,6 +73,7 @@
           <select id="pCategory" class="form-control">
             <option value="เสื้อนักศึกษา">เสื้อนักศึกษา</option>
             <option value="กระโปรงนักศึกษา">กระโปรงนักศึกษา</option>
+            <option value="กางเกงนักศึกษา">กางเกงนักศึกษา</option>
             <option value="อื่นๆ">อื่นๆ</option>
           </select>
         </div>
@@ -82,9 +83,12 @@
           <div class="form-group">
             <label>ทรงกระโปรง:</label>
             <select id="pSkirtStyle" class="form-control">
-              <option value="พลีทกลีบเล็ก">พลีทกลีบเล็ก</option>
-              <option value="พลีทกลีบใหญ่">พลีทกลีบใหญ่</option>
-              <option value="ทรงเอ">ทรงเอ</option>
+              <option value="กระโปรงเอวขอบ">กระโปรงเอวขอบ</option>
+              <option value="พลีทจีบรอบ">พลีทจีบรอบ</option>
+              <option value="พลีทจีบเล็ก">พลีทจีบเล็ก</option>
+              <option value="เอผ่าหน้า">เอผ่าหน้า</option>
+              <option value="เอผ่าหลัง">เอผ่าหลัง</option>
+              <option value="เอไม่ผ่า">เอไม่ผ่า</option>
             </select>
           </div>
           <div class="form-row">
@@ -95,6 +99,20 @@
             <div class="form-group">
               <label>ความยาว (นิ้ว):</label>
               <input type="number" id="pLength" class="form-control" placeholder="เช่น 18">
+            </div>
+          </div>
+        </div>
+
+        <!-- รายละเอียดกางเกง -->
+        <div id="pantsFields" style="display: none;">
+          <div class="form-row">
+            <div class="form-group">
+              <label>ขนาดเอว (นิ้ว):</label>
+              <input type="number" id="pPantsWaist" class="form-control" placeholder="เช่น 30">
+            </div>
+            <div class="form-group">
+              <label>ความยาว (นิ้ว):</label>
+              <input type="number" id="pPantsLength" class="form-control" placeholder="เช่น 40">
             </div>
           </div>
         </div>
