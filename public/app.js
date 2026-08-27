@@ -9,10 +9,10 @@ function getStoredProducts() {
     }
   }
   return [
-    { id: "1", name: "กระโปรงพลีทกลีบเล็ก (เอว 25\" ยาว 18\")", category: "กระโปรงนักศึกษา", stock: 50, cost: 150, price: 200 },
-    { id: "2", name: "เสื้อนักศึกษาชาย แขนสั้น [ไม่มีสาบหลัง] (ขาวสว่าง) ไซส์ M", category: "เสื้อนักศึกษา", stock: 12, cost: 160, price: 220 },
-    { id: "3", name: "เสื้อนักศึกษาหญิง แขนสั้น [ไม่มีสาบหลัง] (ขาวโอโม่) ไซส์ L", category: "เสื้อนักศึกษา", stock: 25, cost: 160, price: 220 },
-    { id: "4", name: "กระโปรงทรงเอ (เอว 26\" ยาว 16\")", category: "กระโปรงนักศึกษา", stock: 8, cost: 140, price: 190 }
+    { id: "1", name: "พลีทจีบเล็ก (เอว 25\" ยาว 18\")", category: "กระโปรงนักศึกษา", stock: 50, cost: 150, price: 200 },
+    { id: "2", name: "เอผ่าหลัง (เอว 26\" ยาว 16\")", category: "กระโปรงนักศึกษา", stock: 15, cost: 160, price: 210 },
+    { id: "3", name: "เสื้อนักศึกษาชาย แขนสั้น [ไม่มีสาบหลัง] (ขาวโอโม่) ไซส์ M", category: "เสื้อนักศึกษา", stock: 12, cost: 160, price: 220 },
+    { id: "4", name: "กางเกงนักศึกษา (เอว 30\" ยาว 40\")", category: "กางเกงนักศึกษา", stock: 20, cost: 220, price: 320 }
   ];
 }
 
@@ -282,7 +282,6 @@ async function loadProducts() {
     </div>
   `;
 
-  // เรียกกรองค้นหาซ้ำอีกครั้งหากมีคำค้นหาค้างอยู่
   filterProducts();
 }
 
@@ -514,22 +513,32 @@ function closeProductForm() {
 function toggleCategoryFields() {
   const cat = document.getElementById('pCategory').value;
   const skirt = document.getElementById('skirtFields');
+  const pants = document.getElementById('pantsFields');
   const shirt = document.getElementById('shirtFields');
   const gName = document.getElementById('generalNameField');
   const gSize = document.getElementById('generalSizeField');
 
   if (cat === 'กระโปรงนักศึกษา') {
     if (skirt) skirt.style.display = 'block';
+    if (pants) pants.style.display = 'none';
+    if (shirt) shirt.style.display = 'none';
+    if (gName) gName.style.display = 'none';
+    if (gSize) gSize.style.display = 'none';
+  } else if (cat === 'กางเกงนักศึกษา') {
+    if (skirt) skirt.style.display = 'none';
+    if (pants) pants.style.display = 'block';
     if (shirt) shirt.style.display = 'none';
     if (gName) gName.style.display = 'none';
     if (gSize) gSize.style.display = 'none';
   } else if (cat === 'เสื้อนักศึกษา') {
     if (skirt) skirt.style.display = 'none';
+    if (pants) pants.style.display = 'none';
     if (shirt) shirt.style.display = 'block';
     if (gName) gName.style.display = 'none';
     if (gSize) gSize.style.display = 'none';
   } else {
     if (skirt) skirt.style.display = 'none';
+    if (pants) pants.style.display = 'none';
     if (shirt) shirt.style.display = 'none';
     if (gName) gName.style.display = 'block';
     if (gSize) gSize.style.display = 'block';
@@ -548,7 +557,11 @@ async function handleProductSubmit(e) {
     const style = document.getElementById('pSkirtStyle').value;
     const waist = document.getElementById('pWaist').value;
     const length = document.getElementById('pLength').value;
-    pName = `กระโปรง${style} (เอว ${waist}" ยาว ${length}")`;
+    pName = `${style} (เอว ${waist}" ยาว ${length}")`;
+  } else if (cat === 'กางเกงนักศึกษา') {
+    const waist = document.getElementById('pPantsWaist').value;
+    const length = document.getElementById('pPantsLength').value;
+    pName = `กางเกงนักศึกษา (เอว ${waist}" ยาว ${length}")`;
   } else if (cat === 'เสื้อนักศึกษา') {
     const gender = document.getElementById('pShirtGender').value;
     const sleeve = document.getElementById('pShirtSleeve').value;
