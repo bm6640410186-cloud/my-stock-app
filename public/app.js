@@ -24,7 +24,7 @@ function saveProductsToStorage(products) {
 let mockProducts = getStoredProducts();
 let globalProducts = [];
 let deadstockViewMode = 'deadstock';
-let productDisplayMode = 'normal'; // 'normal' หรือ 'matrix'
+let productDisplayMode = 'normal';
 let pieChartInstance = null;
 
 async function api(endpoint, options = {}) {
@@ -353,7 +353,7 @@ async function loadProducts() {
   filterProducts();
 }
 
-// 3. ฟังก์ชัน Matrix Grid แบบแก้ไขสมบูรณ์ ปราศจาก Syntax Error
+// 3. ฟังก์ชัน Matrix Grid แยกประเภทเสื้อ (Option 2: มิติเดียว แถวเดียว สวยงามสะอาดตา)
 function renderMatrixGrid() {
   if (!globalProducts || globalProducts.length === 0) {
     return `<div style="background:#fff; padding:20px; border-radius:8px; text-align:center; color:#888;">ไม่พบข้อมูลสินค้าสำหรับแสดงผลเมทริกซ์</div>`;
@@ -377,13 +377,68 @@ function renderMatrixGrid() {
   let html = '';
 
   for (const [groupTitle, items] of Object.entries(groups)) {
+    const isShirtGroup = groupTitle.includes('เสื้อ');
+
+    // กรณีเป็นหมวด "เสื้อนักศึกษา" (ปรับเป็นรูปแบบ Option 2: แสดงเป็นไซส์แถวเดียว)
+    if (isShirtGroup) {
+      const shirtSizes = {};
+      items.forEach(p => {
+        const name = getPName(p);
+        const match = name.match(/(?:ไซส์|ขนาด|รอบอก)\s*[:\s]*([a-zA-Z0-9]+)/i);
+        const sizeKey = match ? match[1].toUpperCase() : 'FREE';
+        shirtSizes[sizeKey] = (shirtSizes[sizeKey] || 0) + getPStock(p);
+      });
+
+      const sortedSizes = Object.keys(shirtSizes).sort((a, b) => {
+        const order = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
+        const idxA = order.indexOf(a);
+        const idxB = order.indexOf(b);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        return a.localeCompare(b);
+      });
+
+      html += `
+        <div class="matrix-group-block" style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:20px;">
+          <h3 style="margin-top:0; color:#2c3e50;">📌 ${groupTitle}</h3>
+          <div style="overflow-x:auto;">
+            <table class="matrix-table" style="width:100%; text-align:center;">
+              <thead>
+                <tr>
+                  ${sortedSizes.map(size => `<th style="background:#eef6ff; font-weight:bold; padding:10px;">ไซส์ ${size}</th>`).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  ${sortedSizes.map(size => {
+                    const stock = shirtSizes[size];
+                    const colorStyle = stock === 0 
+                      ? 'background:#ffebee; color:#c62828;' 
+                      : (stock <= 5 ? 'background:#fff8e1; color:#f57f17;' : 'background:#e8f5e9; color:#2e7d32;');
+                    return `
+                      <td style="padding:10px;">
+                        <div class="matrix-cell-stock" style="${colorStyle} padding:8px; border-radius:6px; font-weight:bold;">
+                          ${stock} ชิ้น
+                        </div>
+                      </td>
+                    `;
+                  }).join('')}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      continue;
+    }
+
+    // กรณีเป็น กางเกง / กระโปรง (รูปแบบ 2 มิติ: ความยาว x เอว เหมือนเดิม)
     const waists = new Set();
     const lengths = new Set();
     const matrix = {};
 
     items.forEach(p => {
       const name = getPName(p);
-      const waistMatch = name.match(/(?:เอว|รอบอก|ไซส์)\s*[:\s]*(\d+|[a-zA-Z]+)/i);
+      const waistMatch = name.match(/(?:เอว)\s*[:\s]*(\d+)/i);
       const lengthMatch = name.match(/(?:ยาว)\s*[:\s]*(\d+)/i);
 
       let wKey = waistMatch ? waistMatch[1] : null;
@@ -398,16 +453,10 @@ function renderMatrixGrid() {
       }
     });
 
-    const sortedWaists = Array.from(waists).sort((a, b) => {
-      return (isNaN(a) || isNaN(b)) ? a.localeCompare(b) : Number(a) - Number(b);
-    });
-    const sortedLengths = Array.from(lengths).sort((a, b) => {
-      return (isNaN(a) || isNaN(b)) ? a.localeCompare(b) : Number(a) - Number(b);
-    });
+    const sortedWaists = Array.from(waists).sort((a, b) => Number(a) - Number(b));
+    const sortedLengths = Array.from(lengths).sort((a, b) => Number(a) - Number(b));
 
     if (sortedWaists.length === 0) continue;
-
-    const isShirtGroup = groupTitle.includes('เสื้อ');
 
     html += `
       <div class="matrix-group-block" style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:20px;">
@@ -416,8 +465,8 @@ function renderMatrixGrid() {
           <table class="matrix-table">
             <thead>
               <tr>
-                <th style="background:#eef6ff;">${isShirtGroup ? 'ประเภท' : 'ความยาว \\ เอว'}</th>
-                ${sortedWaists.map(w => `<th>${isShirtGroup ? 'ไซส์ ' + w : 'เอว ' + w + '"'}</th>`).join('')}
+                <th style="background:#eef6ff;">ความยาว \\ เอว</th>
+                ${sortedWaists.map(w => `<th>เอว ${w}"</th>`).join('')}
               </tr>
             </thead>
             <tbody>
