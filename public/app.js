@@ -1,4 +1,3 @@
-// โหลดข้อมูลจาก localStorage เพื่อบันทึกถาวร
 function getStoredProducts() {
   const saved = localStorage.getItem('stock_app_products');
   if (saved) {
@@ -12,11 +11,12 @@ function getStoredProducts() {
     { id: "1", name: "พลีทจีบเล็ก (เอว 25\" ยาว 18\")", category: "กระโปรงนักศึกษา", stock: 50, cost: 150, price: 200 },
     { id: "2", name: "เอผ่าหลัง (เอว 26\" ยาว 16\")", category: "กระโปรงนักศึกษา", stock: 15, cost: 160, price: 210 },
     { id: "3", name: "เสื้อนักศึกษาชาย แขนสั้น [ไม่มีสาบหลัง] (ขาวโอโม่) ไซส์ M", category: "เสื้อนักศึกษา", stock: 12, cost: 160, price: 220 },
-    { id: "4", name: "กางเกงนักศึกษา (เอว 30\" ยาว 40\")", category: "กางเกงนักศึกษา", stock: 20, cost: 220, price: 320 }
+    { id: "4", name: "กางเกงนักศึกษา (เอว 30\" ยาว 40\")", category: "กางเกงนักศึกษา", stock: 20, cost: 220, price: 320 },
+    { id: "5", name: "พลีทจีบเล็ก (เอว 24\" ยาว 16\")", category: "กระโปรงนักศึกษา", stock: 8, cost: 150, price: 200 },
+    { id: "6", name: "พลีทจีบเล็ก (เอว 26\" ยาว 18\")", category: "กระโปรงนักศึกษา", stock: 0, cost: 150, price: 200 }
   ];
 }
 
-// บันทึกข้อมูลลง localStorage
 function saveProductsToStorage(products) {
   localStorage.setItem('stock_app_products', JSON.stringify(products));
 }
@@ -24,14 +24,13 @@ function saveProductsToStorage(products) {
 let mockProducts = getStoredProducts();
 let globalProducts = [];
 let deadstockViewMode = 'deadstock';
+let productDisplayMode = 'normal'; // 'normal' หรือ 'matrix'
+let pieChartInstance = null;
 
-// ฟังก์ชันเรียก API (Fallback LocalStorage)
 async function api(endpoint, options = {}) {
   try {
     const res = await fetch(endpoint, options);
-    if (!res.ok) {
-      return handleLocalFallback(endpoint, options);
-    }
+    if (!res.ok) return handleLocalFallback(endpoint, options);
     return await res.json();
   } catch (err) {
     return handleLocalFallback(endpoint, options);
@@ -78,7 +77,6 @@ function handleLocalFallback(endpoint, options) {
   return [];
 }
 
-// Navigation Router
 document.addEventListener('DOMContentLoaded', () => {
   const navItems = document.querySelectorAll('.sidebar .nav-item');
   navItems.forEach(item => {
@@ -89,14 +87,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   const categorySelect = document.getElementById('pCategory');
-  if (categorySelect) {
-    categorySelect.addEventListener('change', toggleCategoryFields);
-  }
+  if (categorySelect) categorySelect.addEventListener('change', toggleCategoryFields);
 
   const productForm = document.getElementById('productForm');
-  if (productForm) {
-    productForm.addEventListener('submit', handleProductSubmit);
-  }
+  if (productForm) productForm.addEventListener('submit', handleProductSubmit);
 
   switchView('dashboard');
 });
@@ -104,9 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function switchView(viewName) {
   document.querySelectorAll('.sidebar .nav-item').forEach(item => {
     item.classList.remove('active');
-    if (item.getAttribute('data-view') === viewName) {
-      item.classList.add('active');
-    }
+    if (item.getAttribute('data-view') === viewName) item.classList.add('active');
   });
 
   document.querySelectorAll('.main-content .view').forEach(view => {
@@ -114,9 +106,7 @@ function switchView(viewName) {
   });
 
   const targetView = document.getElementById(`view-${viewName}`);
-  if (targetView) {
-    targetView.style.display = 'block';
-  }
+  if (targetView) targetView.style.display = 'block';
 
   if (viewName === 'dashboard') loadDashboard();
   else if (viewName === 'products') loadProducts();
@@ -129,37 +119,61 @@ function getPStock(p) { return Number(p.stock ?? p.current_stock ?? 0); }
 function getPCost(p) { return Number(p.cost ?? p.cost_price ?? 0); }
 function getPPrice(p) { return Number(p.price ?? p.selling_price ?? 0); }
 
-// ฟังก์ชันสำหรับค้นหา Real-time ในหน้าสินค้า
 function filterProducts() {
   const input = document.getElementById('searchInput');
   if (!input) return;
   const keyword = input.value.toLowerCase().trim();
-  const rows = document.querySelectorAll('#productsTableWrap table tbody tr');
 
-  rows.forEach(row => {
-    const text = row.innerText.toLowerCase();
-    if (text.includes(keyword)) {
-      row.style.display = '';
-    } else {
-      row.style.display = 'none';
-    }
-  });
+  if (productDisplayMode === 'normal') {
+    const rows = document.querySelectorAll('#productsTableWrap table tbody tr');
+    rows.forEach(row => {
+      const text = row.innerText.toLowerCase();
+      row.style.display = text.includes(keyword) ? '' : 'none';
+    });
+  } else {
+    const blocks = document.querySelectorAll('#productsTableWrap .matrix-group-block');
+    blocks.forEach(block => {
+      const text = block.innerText.toLowerCase();
+      block.style.display = text.includes(keyword) ? '' : 'none';
+    });
+  }
 }
 
-// 1. หน้าแดชบอร์ด (Dashboard)
+// 1. หน้าแดชบอร์ด (Dashboard) + เพิ่ม Pie Chart สัดส่วนเงินจม
 async function loadDashboard() {
   const target = document.getElementById('view-dashboard');
   if (!target) return;
 
   const products = await api('/products');
-  if (products && Array.isArray(products)) {
-    globalProducts = products;
-  }
+  if (products && Array.isArray(products)) globalProducts = products;
 
   const totalItems = globalProducts.reduce((sum, p) => sum + getPStock(p), 0);
   const totalValue = globalProducts.reduce((sum, p) => sum + (getPStock(p) * getPCost(p)), 0);
   const lowStockItems = globalProducts.filter(p => getPStock(p) <= 10);
   const deadstockItems = globalProducts.filter(p => getPStock(p) >= 50);
+
+  // คำนวณสัดส่วนทุนแยกตามหมวดหมู่/ทรงสินค้า
+  const categoryCapital = {};
+  globalProducts.forEach(p => {
+    let groupKey = p.category || 'อื่นๆ';
+    const name = getPName(p);
+    
+    // จัดกลุ่มย่อยทรงกระโปรงเพื่อให้เห็นภาพชัดเจนขึ้น
+    if (p.category === 'กระโปรงนักศึกษา') {
+      if (name.includes('กระโปรงเอวขอบ')) groupKey = 'กระโปรงเอวขอบ';
+      else if (name.includes('พลีทจีบรอบ')) groupKey = 'พลีทจีบรอบ';
+      else if (name.includes('พลีทจีบเล็ก')) groupKey = 'พลีทจีบเล็ก';
+      else if (name.includes('เอผ่าหน้า')) groupKey = 'กระโปรงเอผ่าหน้า';
+      else if (name.includes('เอผ่าหลัง')) groupKey = 'กระโปรงเอผ่าหลัง';
+      else if (name.includes('เอไม่ผ่า')) groupKey = 'กระโปรงเอไม่ผ่า';
+    }
+
+    const cap = getPStock(p) * getPCost(p);
+    categoryCapital[groupKey] = (categoryCapital[groupKey] || 0) + cap;
+  });
+
+  const chartLabels = Object.keys(categoryCapital);
+  const chartData = Object.values(categoryCapital);
 
   target.innerHTML = `
     <h2>📊 แดชบอร์ดภาพรวม</h2>
@@ -177,6 +191,14 @@ async function loadDashboard() {
       <div style="flex:1; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border-left:5px solid #17a2b8;">
         <span style="color:#888; font-size:14px;">มูลค่าต้นทุนสินค้าในสต็อกรวม</span>
         <h2 style="margin:10px 0 0 0; color:#333;">${totalValue.toLocaleString()} <span style="font-size:16px; font-weight:normal;">บาท</span></h2>
+      </div>
+    </div>
+
+    <!-- กราฟวงกลม สัดส่วนเงินจมในสต็อก -->
+    <div style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:25px;">
+      <h3 style="margin-top:0; color:#2c3e50;">🥧 สัดส่วนเงินจมในสต็อก แยกตามหมวดหมู่ (Capital Allocation Pie Chart)</h3>
+      <div style="display:flex; align-items:center; justify-content:center; max-height:300px;">
+        <canvas id="capitalPieChart" style="max-height: 280px;"></canvas>
       </div>
     </div>
 
@@ -217,21 +239,65 @@ async function loadDashboard() {
       </div>
     </div>
   `;
+
+  // วาด Pie Chart
+  setTimeout(() => {
+    const ctx = document.getElementById('capitalPieChart');
+    if (ctx) {
+      if (pieChartInstance) pieChartInstance.destroy();
+      pieChartInstance = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: chartLabels,
+          datasets: [{
+            data: chartData,
+            backgroundColor: [
+              '#ff6384', '#36a2eb', '#cc65fe', '#ffce56', 
+              '#4bc0c0', '#9966ff', '#ff9f40', '#e74c3c'
+            ]
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: 'bottom' },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const val = context.raw || 0;
+                  const percent = totalValue > 0 ? ((val / totalValue) * 100).toFixed(1) : 0;
+                  return ` ${context.label}: ${val.toLocaleString()} บาท (${percent}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+  }, 100);
 }
 
-// 2. หน้าสินค้าและสต็อก
+// สลับมุมมองตารางสินค้า (ปกติ vs Matrix Grid)
+function switchProductView(mode) {
+  productDisplayMode = mode;
+  document.getElementById('btnViewNormal').style.background = mode === 'normal' ? '#3498db' : '#e0e0e0';
+  document.getElementById('btnViewNormal').style.color = mode === 'normal' ? 'white' : '#333';
+  document.getElementById('btnViewMatrix').style.background = mode === 'matrix' ? '#3498db' : '#e0e0e0';
+  document.getElementById('btnViewMatrix').style.color = mode === 'matrix' ? 'white' : '#333';
+  loadProducts();
+}
+
+// 2. หน้าสินค้าและสต็อก (รองรับทั้งตารางปกติ และ Matrix Grid View)
 async function loadProducts() {
   const tableWrap = document.getElementById('productsTableWrap');
   if (!tableWrap) return;
 
   const products = await api('/products');
-  if (products && Array.isArray(products)) {
-    globalProducts = products;
-  }
+  if (products && Array.isArray(products)) globalProducts = products;
 
   const totalStockCost = globalProducts.reduce((sum, p) => sum + (getPStock(p) * getPCost(p)), 0);
 
-  tableWrap.innerHTML = `
+  let contentHtml = `
     <div style="background:#eef6ff; border-left:5px solid #007bff; padding:15px 20px; border-radius:8px; margin-top:15px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
       <div>
         <span style="color:#555; font-size:14px; font-weight:bold;">💰 รวมราคาทุนสินค้าทั้งหมดในสต็อก (Total Capital Value):</span>
@@ -240,49 +306,151 @@ async function loadProducts() {
         <span style="color:#007bff; font-size:24px; font-weight:bold;">${totalStockCost.toLocaleString()} ฿</span>
       </div>
     </div>
-
-    <div style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
-      <table style="width:100%; border-collapse:collapse;">
-        <thead>
-          <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
-            <th style="padding:10px;">หมวดหมู่</th>
-            <th>ชื่อ / รายละเอียดสินค้า</th>
-            <th>คงเหลือ (ชิ้น)</th>
-            <th>ราคาทุน (฿)</th>
-            <th>ราคาขาย (฿)</th>
-            <th>ราคาทุนรวม (฿)</th>
-            <th style="text-align:center;">จัดการ</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${globalProducts.map(p => {
-            const pId = String(p.id || p._id);
-            const stock = getPStock(p);
-            const cost = getPCost(p);
-            const price = getPPrice(p);
-            const totalCost = stock * cost;
-            const safeName = getPName(p).replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            return `
-              <tr style="border-bottom:1px solid #f9f9f9;">
-                <td style="padding:10px;">${p.category || '-'}</td>
-                <td><strong>${getPName(p)}</strong></td>
-                <td><span style="color:${stock > 10 ? '#28a745' : '#dc3545'}; font-weight:bold;">${stock}</span></td>
-                <td>${cost.toLocaleString()}</td>
-                <td><strong>${price.toLocaleString()}</strong></td>
-                <td style="color:#666;">${totalCost.toLocaleString()}</td>
-                <td style="text-align:center;">
-                  <button onclick="editProductDetails('${pId}', ${stock}, ${cost}, ${price})" title="แก้ไขสินค้า" style="background:#ffc107; border:none; color:#333; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; margin-right:5px;">✏️ แก้ไข</button>
-                  <button onclick="removeProductItem('${pId}', '${safeName}')" title="ลบสินค้า" style="background:#dc3545; border:none; color:#fff; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold;">🗑️ ลบ</button>
-                </td>
-              </tr>
-            `;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
   `;
 
+  if (productDisplayMode === 'normal') {
+    // มุมมองแบบตารางปกติ
+    contentHtml += `
+      <div style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:2px solid #eee; text-align:left; color:#555;">
+              <th style="padding:10px;">หมวดหมู่</th>
+              <th>ชื่อ / รายละเอียดสินค้า</th>
+              <th>คงเหลือ (ชิ้น)</th>
+              <th>ราคาทุน (฿)</th>
+              <th>ราคาขาย (฿)</th>
+              <th>ราคาทุนรวม (฿)</th>
+              <th style="text-align:center;">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${globalProducts.map(p => {
+              const pId = String(p.id || p._id);
+              const stock = getPStock(p);
+              const cost = getPCost(p);
+              const price = getPPrice(p);
+              const totalCost = stock * cost;
+              const safeName = getPName(p).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+              return `
+                <tr style="border-bottom:1px solid #f9f9f9;">
+                  <td style="padding:10px;">${p.category || '-'}</td>
+                  <td><strong>${getPName(p)}</strong></td>
+                  <td><span style="color:${stock > 10 ? '#28a745' : '#dc3545'}; font-weight:bold;">${stock}</span></td>
+                  <td>${cost.toLocaleString()}</td>
+                  <td><strong>${price.toLocaleString()}</strong></td>
+                  <td style="color:#666;">${totalCost.toLocaleString()}</td>
+                  <td style="text-align:center;">
+                    <button onclick="editProductDetails('${pId}', ${stock}, ${cost}, ${price})" title="แก้ไขสินค้า" style="background:#ffc107; border:none; color:#333; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; margin-right:5px;">✏️ แก้ไข</button>
+                    <button onclick="removeProductItem('${pId}', '${safeName}')" title="ลบสินค้า" style="background:#dc3545; border:none; color:#fff; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold;">🗑️ ลบ</button>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } else {
+    // มุมมองตารางเมทริกซ์ (Matrix Grid View)
+    contentHtml += renderMatrixGrid();
+  }
+
+  tableWrap.innerHTML = contentHtml;
   filterProducts();
+}
+
+// ฟังก์ชันสร้าง Matrix Grid View สำหรับ กระโปรง/กางเกง (แยกตาม เอว x ความยาว)
+function renderMatrixGrid() {
+  const skirtsAndPants = globalProducts.filter(p => 
+    p.category === 'กระโปรงนักศึกษา' || p.category === 'กางเกงนักศึกษา'
+  );
+
+  if (skirtsAndPants.length === 0) {
+    return `<div style="background:#fff; padding:20px; border-radius:8px; text-align:center; color:#888;">ไม่พบสินค้าประเภทกระโปรงหรือกางเกงสำหรับแสดงผลเมทริกซ์</div>`;
+  }
+
+  // จัดกลุ่มสินค้าตามชื่อรุ่น/ทรง
+  const groups = {};
+  skirtsAndPants.forEach(p => {
+    const name = getPName(p);
+    // ดึงเฉพาะชื่อทรง
+    let styleName = p.category;
+    if (name.includes('(')) {
+      styleName = name.split('(')[0].trim();
+    }
+
+    if (!groups[styleName]) groups[styleName] = [];
+    groups[styleName].push(p);
+  });
+
+  let html = '';
+
+  for (const [groupTitle, items] of Object.entries(groups)) {
+    const waists = new Set();
+    const lengths = new Set();
+    const matrix = {}; // matrix[length][waist] = stock
+
+    items.forEach(item => {
+      const name = getPName(item);
+      const waistMatch = name.match(/เอว\s*(\d+)/i);
+      const lengthMatch = name.match(/ยาว\s*(\d+)/i);
+
+      if (waistMatch && lengthMatch) {
+        const w = parseInt(waistMatch[1]);
+        const l = parseInt(lengthMatch[1]);
+        waists.add(w);
+        lengths.add(l);
+
+        if (!matrix[l]) matrix[l] = {};
+        matrix[l][w] = (matrix[l][w] || 0) + getPStock(item);
+      }
+    });
+
+    const sortedWaists = Array.from(waists).sort((a, b) => a - b);
+    const sortedLengths = Array.from(lengths).sort((a, b) => a - b);
+
+    if (sortedWaists.length === 0 || sortedLengths.length === 0) continue;
+
+    html += `
+      <div class="matrix-group-block" style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05); margin-bottom:20px;">
+        <h3 style="margin-top:0; color:#2c3e50;">📌 ${groupTitle}</h3>
+        <div style="overflow-x:auto;">
+          <table class="matrix-table">
+            <thead>
+              <tr>
+                <th style="background:#eef6ff;">ความยาว \\ เอว</th>
+                ${sortedWaists.map(w => `<th>เอว ${w}"</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${sortedLengths.map(l => `
+                <tr>
+                  <td style="font-weight:bold; background:#f8f9fa;">ยาว ${l}"</td>
+                  ${sortedWaists.map(w => {
+                    const stock = matrix[l] && matrix[l][w] !== undefined ? matrix[l][w] : null;
+                    if (stock === null) return `<td class="matrix-cell-empty">-</td>`;
+                    const colorStyle = stock === 0 
+                      ? 'background:#ffebee; color:#c62828;' 
+                      : (stock <= 5 ? 'background:#fff8e1; color:#f57f17;' : 'background:#e8f5e9; color:#2e7d32;');
+                    return `
+                      <td>
+                        <div class="matrix-cell-stock" style="${colorStyle}">
+                          ${stock} ชิ้น
+                        </div>
+                      </td>
+                    `;
+                  }).join('')}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  return html || `<div style="background:#fff; padding:20px; border-radius:8px; text-align:center; color:#888;">ไม่มีข้อมูลไซส์เอวและความยาวที่สมบูรณ์สำหรับวาดเมทริกซ์</div>`;
 }
 
 async function editProductDetails(id, currentStock, currentCost, currentPrice) {
@@ -333,15 +501,12 @@ async function removeProductItem(id, name) {
   }
 }
 
-// 3. หน้าสินค้าค้างสต็อก
 async function loadDeadstock() {
   const target = document.getElementById('view-deadstock');
   if (!target) return;
 
   const products = await api('/products');
-  if (products && Array.isArray(products)) {
-    globalProducts = products;
-  }
+  if (products && Array.isArray(products)) globalProducts = products;
 
   const highStockItems = globalProducts.filter(p => getPStock(p) >= 50);
   const deadstockCapital = highStockItems.reduce((sum, p) => sum + (getPStock(p) * getPCost(p)), 0);
@@ -423,15 +588,12 @@ function switchDeadstockMode(mode) {
   loadDeadstock();
 }
 
-// 4. หน้าวิเคราะห์สต็อก AI
 async function loadAIAnalyticsPage() {
   const target = document.getElementById('view-ai-analytics');
   if (!target) return;
 
   const products = await api('/products');
-  if (products && Array.isArray(products)) {
-    globalProducts = products;
-  }
+  if (products && Array.isArray(products)) globalProducts = products;
 
   const reorderList = globalProducts.filter(p => getPStock(p) <= 10).map(p => ({
     ...p,
@@ -499,7 +661,6 @@ async function loadAIAnalyticsPage() {
   `;
 }
 
-// ระบบฟอร์มเพิ่มสินค้า
 function openProductForm() {
   const modal = document.getElementById('productModal');
   if (modal) { modal.style.display = 'block'; toggleCategoryFields(); }
