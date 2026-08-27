@@ -23,7 +23,8 @@ function saveProductsToStorage(products) {
 
 let mockProducts = getStoredProducts();
 let globalProducts = [];
-let deadstockViewMode = 'deadstock';
+let deadstockViewMode = 'deadstock'; // 'deadstock' | 'all_cost'
+let deadstockCategoryFilter = 'all';  // 'all' | 'เสื้อนักศึกษาชาย' | 'เสื้อนักศึกษาหญิง' | 'กระโปรงนักศึกษา' | 'กางเกงนักศึกษา'
 let productDisplayMode = 'normal';
 let pieChartInstance = null;
 
@@ -353,7 +354,7 @@ async function loadProducts() {
   filterProducts();
 }
 
-// 3. ฟังก์ชัน Matrix Grid แยกประเภทเสื้อ (Option 2: มิติเดียว แถวเดียว สวยงามสะอาดตา)
+// 3. ฟังก์ชัน Matrix Grid
 function renderMatrixGrid() {
   if (!globalProducts || globalProducts.length === 0) {
     return `<div style="background:#fff; padding:20px; border-radius:8px; text-align:center; color:#888;">ไม่พบข้อมูลสินค้าสำหรับแสดงผลเมทริกซ์</div>`;
@@ -379,7 +380,6 @@ function renderMatrixGrid() {
   for (const [groupTitle, items] of Object.entries(groups)) {
     const isShirtGroup = groupTitle.includes('เสื้อ');
 
-    // กรณีเป็นหมวด "เสื้อนักศึกษา" (ปรับเป็นรูปแบบ Option 2: แสดงเป็นไซส์แถวเดียว)
     if (isShirtGroup) {
       const shirtSizes = {};
       items.forEach(p => {
@@ -431,7 +431,6 @@ function renderMatrixGrid() {
       continue;
     }
 
-    // กรณีเป็น กางเกง / กระโปรง (รูปแบบ 2 มิติ: ความยาว x เอว เหมือนเดิม)
     const waists = new Set();
     const lengths = new Set();
     const matrix = {};
@@ -547,6 +546,7 @@ async function removeProductItem(id, name) {
   }
 }
 
+// 4. หน้าวิเคราะห์ต้นทุนสินค้า & สินค้าค้างสต็อก (เพิ่ม Filter คลิกหมวดหมู่ประเภทสินค้า)
 async function loadDeadstock() {
   const target = document.getElementById('view-deadstock');
   if (!target) return;
@@ -554,16 +554,62 @@ async function loadDeadstock() {
   const products = await api('/products');
   if (products && Array.isArray(products)) globalProducts = products;
 
-  const highStockItems = globalProducts.filter(p => getPStock(p) >= 50);
-  const deadstockCapital = highStockItems.reduce((sum, p) => sum + (getPStock(p) * getPCost(p)), 0);
-  const totalAllCapital = globalProducts.reduce((sum, p) => sum + (getPStock(p) * getPCost(p)), 0);
+  // ฟังก์ชันตัวกรองหมวดหมู่สินค้า
+  const filterByCategory = (pList) => {
+    if (deadstockCategoryFilter === 'all') return pList;
+    return pList.filter(p => {
+      const name = getPName(p);
+      const cat = p.category || '';
+      
+      if (deadstockCategoryFilter === 'เสื้อนักศึกษาชาย') {
+        return cat === 'เสื้อนักศึกษา' && (name.includes('ชาย') || name.includes('เสื้อชาย'));
+      }
+      if (deadstockCategoryFilter === 'เสื้อนักศึกษาหญิง') {
+        return cat === 'เสื้อนักศึกษา' && (name.includes('หญิง') || name.includes('เสื้อหญิง'));
+      }
+      if (deadstockCategoryFilter === 'กระโปรงนักศึกษา') {
+        return cat === 'กระโปรงนักศึกษา';
+      }
+      if (deadstockCategoryFilter === 'กางเกงนักศึกษา') {
+        return cat === 'กางเกงนักศึกษา';
+      }
+      return true;
+    });
+  };
 
-  const displayList = deadstockViewMode === 'deadstock' ? highStockItems : globalProducts;
+  const filteredBaseProducts = filterByCategory(globalProducts);
+  const highStockItems = filteredBaseProducts.filter(p => getPStock(p) >= 50);
+
+  const deadstockCapital = highStockItems.reduce((sum, p) => sum + (getPStock(p) * getPCost(p)), 0);
+  const totalAllCapital = filteredBaseProducts.reduce((sum, p) => sum + (getPStock(p) * getPCost(p)), 0);
+
+  const displayList = deadstockViewMode === 'deadstock' ? highStockItems : filteredBaseProducts;
+
+  const categoriesTab = [
+    { id: 'all', label: 'ทั้งหมด' },
+    { id: 'เสื้อนักศึกษาชาย', label: '👔 เสื้อนักศึกษาชาย' },
+    { id: 'เสื้อนักศึกษาหญิง', label: '👚 เสื้อนักศึกษาหญิง' },
+    { id: 'กระโปรงนักศึกษา', label: '👗 กระโปรงนักศึกษา' },
+    { id: 'กางเกงนักศึกษา', label: '👖 กางเกงนักศึกษา' }
+  ];
 
   target.innerHTML = `
     <h2>⚠️ วิเคราะห์ต้นทุนสินค้า & สินค้าค้างสต็อก</h2>
     <p style="color:#666; margin-bottom:20px;">ตรวจสอบต้นทุนจมและมูลค่าเงินทุนสินค้าคงเหลือทั้งหมด</p>
 
+    <!-- ปุ่มแท็บกรองประเภทสินค้า -->
+    <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
+      ${categoriesTab.map(tab => {
+        const isActive = deadstockCategoryFilter === tab.id;
+        return `
+          <button onclick="switchDeadstockCategoryFilter('${tab.id}')" style="padding:8px 16px; border-radius:20px; border:1px solid ${isActive ? '#007bff' : '#ccc'}; cursor:pointer; font-weight:bold; font-size:14px; transition:all 0.2s; ${isActive ? 'background:#007bff; color:#fff; box-shadow:0 2px 5px rgba(0,123,255,0.3);' : 'background:#fff; color:#555;'}">
+            ${tab.label}
+          </button>
+        `;
+      }).join('')}
+    </div>
+
+    <!-- ปุ่มสลับดูเฉพาะ Deadstock หรือ ทุนทั้งหมด -->
     <div style="display:flex; gap:10px; margin-bottom:20px;">
       <button onclick="switchDeadstockMode('deadstock')" style="padding:10px 20px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; ${deadstockViewMode === 'deadstock' ? 'background:#dc3545; color:#fff;' : 'background:#e0e0e0; color:#333;'}">
         🔥 ดูเฉพาะสินค้าค้างสต็อก (≥ 50 ชิ้น)
@@ -582,13 +628,14 @@ async function loadDeadstock() {
       <div style="flex:1; border-left:5px solid #007bff; background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
         <span style="color:#666; font-size:14px;">รวมเงินต้นทุนสินค้าทั้งหมดในระบบ</span>
         <h2 style="margin:5px 0 0 0; color:#007bff; font-size:24px;">${totalAllCapital.toLocaleString()} บาท</h2>
-        <small style="color:#888;">จำนวน ${globalProducts.length} รายการ</small>
+        <small style="color:#888;">จำนวน ${filteredBaseProducts.length} รายการ</small>
       </div>
     </div>
 
     <div style="background:#fff; padding:20px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
       <h3 style="margin-top:0; color:#333;">
         ${deadstockViewMode === 'deadstock' ? '📦 รายการสินค้าค้างสต็อกเกินกำหนด' : '📋 รายการและมูลค่าต้นทุนสินค้าทั้งหมด'}
+        ${deadstockCategoryFilter !== 'all' ? `<span style="font-size:14px; color:#007bff; font-weight:normal;"> (${deadstockCategoryFilter})</span>` : ''}
       </h3>
       ${displayList.length > 0 ? `
         <table style="width:100%; border-collapse:collapse; margin-top:15px;">
@@ -624,9 +671,14 @@ async function loadDeadstock() {
             }).join('')}
           </tbody>
         </table>
-      ` : '<p style="color:#888;">ไม่พบรายการสินค้าในหมวดหมู่นี้</p>'}
+      ` : '<p style="color:#888;">ไม่พบรายการสินค้าในประเภทที่เลือก</p>'}
     </div>
   `;
+}
+
+function switchDeadstockCategoryFilter(catId) {
+  deadstockCategoryFilter = catId;
+  loadDeadstock();
 }
 
 function switchDeadstockMode(mode) {
@@ -634,6 +686,7 @@ function switchDeadstockMode(mode) {
   loadDeadstock();
 }
 
+// 5. หน้า AI Analytics
 async function loadAIAnalyticsPage() {
   const target = document.getElementById('view-ai-analytics');
   if (!target) return;
