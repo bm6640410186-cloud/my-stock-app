@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ระบบจัดการสต็อกสินค้า</title>
+  <!-- ดึง Chart.js สำหรับวาดกราฟวงกลม -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     * { box-sizing: border-box; font-family: 'Kanit', sans-serif, system-ui; }
     body { display: flex; margin: 0; background: #f4f6f9; color: #333; }
@@ -25,6 +27,13 @@
     .form-row .form-group { flex: 1; }
     .search-box { width: 100%; padding: 12px 15px; font-size: 15px; border: 2px solid #3498db; border-radius: 8px; margin-top: 15px; outline: none; transition: 0.2s; }
     .search-box:focus { border-color: #2980b9; box-shadow: 0 0 5px rgba(52, 152, 219, 0.4); }
+    
+    /* สไตล์เฉพาะตาราง Matrix Grid */
+    .matrix-table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; text-align: center; }
+    .matrix-table th, .matrix-table td { border: 1px solid #dee2e6; padding: 10px; font-size: 14px; }
+    .matrix-table th { background: #f8f9fa; font-weight: bold; }
+    .matrix-cell-empty { background: #fdfdfd; color: #ccc; }
+    .matrix-cell-stock { font-weight: bold; border-radius: 4px; }
   </style>
 </head>
 <body>
@@ -46,6 +55,12 @@
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <h2>🛍️ สินค้าและสต็อก</h2>
         <button class="btn-primary" onclick="openProductForm()">✨ เพิ่มสินค้าใหม่</button>
+      </div>
+
+      <!-- ปุ่มสลับมุมมองปกติ vs Matrix Grid -->
+      <div style="display: flex; gap: 10px; margin-top: 15px;">
+        <button id="btnViewNormal" onclick="switchProductView('normal')" style="padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; background: #3498db; color: white;">📋 ตารางปกติ</button>
+        <button id="btnViewMatrix" onclick="switchProductView('matrix')" style="padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; background: #e0e0e0; color: #333;">📊 มุมมองเมทริกซ์ (Matrix Grid)</button>
       </div>
 
       <!-- ช่องค้นหา Real-time -->
